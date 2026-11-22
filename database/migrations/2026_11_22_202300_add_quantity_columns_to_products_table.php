@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\DemoCatalog;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -21,6 +22,8 @@ return new class extends Migration
             $table->unsignedInteger('noon_received_qty')->default(0);
             $table->unsignedInteger('namshi_received_qty')->default(0);
         });
+
+        DemoCatalog::applyExpectedQuantities();
     }
 
     /**

@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\Api\StatusController;
+use App\Http\Controllers\ProductBoardController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', StatusController::class);
+Route::get('/', ProductBoardController::class);

@@ -15,18 +15,22 @@ class ProductTest extends TestCase
         $response = $this->getJson('/api/products');
 
         $response->assertOk()
-            ->assertJsonCount(15, 'data')
-            ->assertJsonPath('meta.total', 20)
+            ->assertJsonCount(10, 'data')
+            ->assertJsonPath('meta.total', 10)
             ->assertJsonPath('meta.per_page', 15)
             ->assertJsonPath('meta.current_page', 1)
             ->assertJsonPath('data.0.sku', 'USB2866')
-            ->assertJsonPath('data.0.barcode', null);
+            ->assertJsonPath('data.0.barcode', null)
+            ->assertJsonPath('data.0.total_expected_qty', 6)
+            ->assertJsonPath('data.0.amazon_expected_qty', 2)
+            ->assertJsonPath('data.0.noon_expected_qty', 2)
+            ->assertJsonPath('data.0.namshi_expected_qty', 2);
 
         $this->getJson('/api/products?page=2')
             ->assertOk()
-            ->assertJsonCount(5, 'data')
+            ->assertJsonCount(0, 'data')
             ->assertJsonPath('meta.current_page', 2)
-            ->assertJsonPath('meta.total', 20);
+            ->assertJsonPath('meta.total', 10);
     }
 
     public function test_products_respect_per_page(): void
@@ -35,7 +39,7 @@ class ProductTest extends TestCase
             ->assertOk()
             ->assertJsonCount(5, 'data')
             ->assertJsonPath('meta.per_page', 5)
-            ->assertJsonPath('meta.last_page', 4);
+            ->assertJsonPath('meta.last_page', 2);
     }
 
     public function test_invalid_pagination_is_rejected(): void
@@ -150,7 +154,7 @@ class ProductTest extends TestCase
 
         $this->getJson('/api/products?status=pending')
             ->assertOk()
-            ->assertJsonPath('meta.total', 19);
+            ->assertJsonPath('meta.total', 9);
     }
 
     public function test_invalid_status_is_rejected(): void
@@ -171,12 +175,15 @@ class ProductTest extends TestCase
 
         $this->getJson('/api/stats')
             ->assertOk()
-            ->assertJsonPath('data.total', 20)
+            ->assertJsonPath('data.total', 10)
             ->assertJsonPath('data.mapped', 2)
-            ->assertJsonPath('data.pending', 18)
-            ->assertJsonPath('data.expected_qty', 0)
+            ->assertJsonPath('data.pending', 8)
+            ->assertJsonPath('data.expected_qty', 60)
             ->assertJsonPath('data.received_qty', 0)
-            ->assertJsonPath('data.remaining_qty', 0)
+            ->assertJsonPath('data.remaining_qty', 60)
+            ->assertJsonPath('data.shops.amazon.expected_qty', 20)
+            ->assertJsonPath('data.shops.noon.expected_qty', 20)
+            ->assertJsonPath('data.shops.namshi.expected_qty', 20)
             ->assertJsonPath('data.shops.amazon.received_qty', 0)
             ->assertJsonPath('data.shops.noon.received_qty', 0)
             ->assertJsonPath('data.shops.namshi.received_qty', 0);
@@ -197,8 +204,6 @@ class ProductTest extends TestCase
     {
         Product::query()->where('sku', 'USB2866')->update([
             'barcode' => '8684053504184',
-            'amazon_expected_qty' => 20,
-            'total_expected_qty' => 20,
         ]);
 
         $this->postJson('/api/products/barcode/8684053504184/receive', [
@@ -222,8 +227,8 @@ class ProductTest extends TestCase
         $this->getJson('/api/stats')
             ->assertOk()
             ->assertJsonPath('data.received_qty', 11)
-            ->assertJsonPath('data.expected_qty', 20)
-            ->assertJsonPath('data.remaining_qty', 9)
+            ->assertJsonPath('data.expected_qty', 60)
+            ->assertJsonPath('data.remaining_qty', 49)
             ->assertJsonPath('data.shops.amazon.received_qty', 10)
             ->assertJsonPath('data.shops.amazon.expected_qty', 20)
             ->assertJsonPath('data.shops.amazon.remaining_qty', 10)
@@ -297,5 +302,56 @@ class ProductTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.sku', 'USB2866')
             ->assertJsonPath('data.barcode', '8684053504184');
+    }
+
+    public function test_home_shows_product_table(): void
+    {
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('USB2866')
+            ->assertSee('Toddler white T-shirt')
+            ->assertSee('Amazon exp')
+            ->assertSee('Noon rec')
+            ->assertSee('Namshi exp')
+            ->assertSee('Total rec');
+    }
+
+    public function test_demo_reset_rebuilds_catalog(): void
+    {
+        Product::query()->where('sku', 'USB2866')->update([
+            'barcode' => '8684053504184',
+            'amazon_received_qty' => 2,
+            'total_received_qty' => 2,
+        ]);
+        Product::query()->where('sku', 'USB3102')->delete();
+        Product::query()->create([
+            'sku' => 'USB9999',
+            'name' => 'Temporary product',
+            'total_expected_qty' => 6,
+        ]);
+
+        $this->postJson('/api/demo/reset')
+            ->assertOk()
+            ->assertJsonPath('data.reset', true)
+            ->assertJsonPath('data.products', 10);
+
+        $this->assertSame(10, Product::query()->count());
+        $this->assertTrue(Product::query()->where('sku', 'USB2866')->exists());
+        $this->assertTrue(Product::query()->where('sku', 'USB3102')->exists());
+        $this->assertFalse(Product::query()->where('sku', 'USB9999')->exists());
+        $this->assertNull(Product::query()->where('sku', 'USB2866')->value('barcode'));
+        $this->assertSame(0, (int) Product::query()->where('sku', 'USB2866')->value('total_received_qty'));
+        $this->assertSame(6, (int) Product::query()->where('sku', 'USB2866')->value('total_expected_qty'));
+
+        $this->getJson('/api/stats')
+            ->assertOk()
+            ->assertJsonPath('data.total', 10)
+            ->assertJsonPath('data.mapped', 0)
+            ->assertJsonPath('data.pending', 10)
+            ->assertJsonPath('data.expected_qty', 60)
+            ->assertJsonPath('data.received_qty', 0)
+            ->assertJsonPath('data.shops.amazon.expected_qty', 20)
+            ->assertJsonPath('data.shops.noon.expected_qty', 20)
+            ->assertJsonPath('data.shops.namshi.expected_qty', 20);
     }
 }
