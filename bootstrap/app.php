@@ -13,6 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'receiver.basic' => \App\Http\Middleware\BasicAuth::class,
+        ]);
+        $middleware->appendToGroup('web', 'receiver.basic');
+        $middleware->appendToGroup('api', 'receiver.basic');
+
         $middleware->trustProxies(at: '*');
 
         $hosts = [

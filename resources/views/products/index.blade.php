@@ -12,7 +12,6 @@
                 --muted: #6B6458;
                 --border: #D6CFC0;
                 --mapped: #1F7A4D;
-                --pending: #C45C26;
                 --header: #163A4A;
             }
 
@@ -27,7 +26,7 @@
             }
 
             .page {
-                max-width: 1400px;
+                max-width: 1600px;
                 margin: 0 auto;
                 padding: 24px 20px 48px;
             }
@@ -44,11 +43,19 @@
                 font-size: 16px;
             }
 
+            .top {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 20px;
+            }
+
             .stats {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 10px;
-                margin-bottom: 20px;
             }
 
             .stat {
@@ -75,7 +82,16 @@
             }
 
             .stat.mapped strong { color: var(--mapped); }
-            .stat.pending strong { color: var(--pending); }
+
+            .export {
+                display: inline-block;
+                background: var(--header);
+                color: #FFFFFF;
+                text-decoration: none;
+                font-weight: 700;
+                border-radius: 12px;
+                padding: 14px 18px;
+            }
 
             .table-wrap {
                 overflow-x: auto;
@@ -87,7 +103,7 @@
             table {
                 width: 100%;
                 border-collapse: collapse;
-                min-width: 1100px;
+                min-width: 1280px;
             }
 
             th, td {
@@ -113,13 +129,9 @@
                 font-variant-numeric: tabular-nums;
             }
 
-            td.sku {
-                font-weight: 800;
-            }
-
             td.name {
                 white-space: normal;
-                min-width: 180px;
+                min-width: 160px;
             }
 
             td.num, th.num {
@@ -134,25 +146,6 @@
                 color: var(--muted);
             }
 
-            .badge {
-                display: inline-block;
-                border-radius: 999px;
-                padding: 3px 8px;
-                font-size: 11px;
-                font-weight: 700;
-                text-transform: uppercase;
-            }
-
-            .badge.mapped {
-                background: #DCEFE3;
-                color: var(--mapped);
-            }
-
-            .badge.pending {
-                background: #F8E6D8;
-                color: var(--pending);
-            }
-
             tfoot td {
                 font-weight: 800;
                 background: #E7E1D4;
@@ -163,98 +156,73 @@
     <body>
         <div class="page">
             <h1>Receiver</h1>
-            <p class="lede">All products and quantities.</p>
+            <p class="lede">Scanned lot quantities by size barcode.</p>
 
-            <div class="stats">
-                <div class="stat">
-                    <span>Products</span>
-                    <strong>{{ $products->count() }}</strong>
+            <div class="top">
+                <div class="stats">
+                    <div class="stat">
+                        <span>Rows</span>
+                        <strong>{{ $items->count() }}</strong>
+                    </div>
+                    <div class="stat mapped">
+                        <span>Amazon</span>
+                        <strong>{{ $amazon }}</strong>
+                    </div>
+                    <div class="stat mapped">
+                        <span>Noon</span>
+                        <strong>{{ $noon }}</strong>
+                    </div>
+                    <div class="stat mapped">
+                        <span>Namshi</span>
+                        <strong>{{ $namshi }}</strong>
+                    </div>
                 </div>
-                <div class="stat mapped">
-                    <span>Linked</span>
-                    <strong>{{ $mapped }}</strong>
-                </div>
-                <div class="stat pending">
-                    <span>Waiting</span>
-                    <strong>{{ $pending }}</strong>
-                </div>
-                <div class="stat mapped">
-                    <span>Received</span>
-                    <strong>{{ $totals['total_received_qty'] }}</strong>
-                </div>
-                <div class="stat">
-                    <span>Expected</span>
-                    <strong>{{ $totals['total_expected_qty'] }}</strong>
-                </div>
-                <div class="stat pending">
-                    <span>Left</span>
-                    <strong>{{ max(0, $totals['total_expected_qty'] - $totals['total_received_qty']) }}</strong>
-                </div>
+                <a class="export" href="{{ url('/export.csv') }}">Download CSV</a>
             </div>
 
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
-                            <th>SKU</th>
+                            <th>Model</th>
                             <th>Name</th>
-                            <th>Barcode</th>
-                            <th>Status</th>
-                            <th class="num">Amazon exp</th>
-                            <th class="num">Amazon rec</th>
-                            <th class="num">Noon exp</th>
-                            <th class="num">Noon rec</th>
-                            <th class="num">Namshi exp</th>
-                            <th class="num">Namshi rec</th>
-                            <th class="num">Total exp</th>
-                            <th class="num">Total rec</th>
-                            <th class="num">Left</th>
+                            <th>Color</th>
+                            <th>Size</th>
+                            <th>Lot barcode</th>
+                            <th>Item barcode</th>
+                            <th class="num">Per lot</th>
+                            <th class="num">Amazon</th>
+                            <th class="num">Noon</th>
+                            <th class="num">Namshi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($products as $product)
-                            @php
-                                $linked = filled($product->barcode);
-                                $left = max(0, $product->total_expected_qty - $product->total_received_qty);
-                            @endphp
+                        @forelse ($items as $item)
                             <tr>
-                                <td class="sku">{{ $product->sku }}</td>
-                                <td class="name">{{ $product->name }}</td>
-                                <td class="{{ $linked ? '' : 'empty' }}">{{ $product->barcode ?: '—' }}</td>
-                                <td>
-                                    <span class="badge {{ $linked ? 'mapped' : 'pending' }}">
-                                        {{ $linked ? 'Linked' : 'Waiting' }}
-                                    </span>
-                                </td>
-                                <td class="num">{{ $product->amazon_expected_qty }}</td>
-                                <td class="num">{{ $product->amazon_received_qty }}</td>
-                                <td class="num">{{ $product->noon_expected_qty }}</td>
-                                <td class="num">{{ $product->noon_received_qty }}</td>
-                                <td class="num">{{ $product->namshi_expected_qty }}</td>
-                                <td class="num">{{ $product->namshi_received_qty }}</td>
-                                <td class="num">{{ $product->total_expected_qty }}</td>
-                                <td class="num">{{ $product->total_received_qty }}</td>
-                                <td class="num">{{ $left }}</td>
+                                <td>{{ $item->lot?->model }}</td>
+                                <td class="name">{{ $item->lot?->name_en }}</td>
+                                <td>{{ $item->lot?->color_en ?: $item->lot?->color }}</td>
+                                <td>{{ $item->size_code }}</td>
+                                <td>{{ $item->lot?->lot_barcode }}</td>
+                                <td>{{ $item->barcode }}</td>
+                                <td class="num">{{ $item->pieces_per_lot }}</td>
+                                <td class="num">{{ $item->amazon_received_qty }}</td>
+                                <td class="num">{{ $item->noon_received_qty }}</td>
+                                <td class="num">{{ $item->namshi_received_qty }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="13" class="empty">No products yet.</td>
+                                <td colspan="10" class="empty">No catalog rows. Run php artisan db:seed.</td>
                             </tr>
                         @endforelse
                     </tbody>
-                    @if ($products->isNotEmpty())
+                    @if ($items->isNotEmpty())
                         <tfoot>
                             <tr>
-                                <td colspan="4">Total</td>
-                                <td class="num">{{ $totals['amazon_expected_qty'] }}</td>
-                                <td class="num">{{ $totals['amazon_received_qty'] }}</td>
-                                <td class="num">{{ $totals['noon_expected_qty'] }}</td>
-                                <td class="num">{{ $totals['noon_received_qty'] }}</td>
-                                <td class="num">{{ $totals['namshi_expected_qty'] }}</td>
-                                <td class="num">{{ $totals['namshi_received_qty'] }}</td>
-                                <td class="num">{{ $totals['total_expected_qty'] }}</td>
-                                <td class="num">{{ $totals['total_received_qty'] }}</td>
-                                <td class="num">{{ max(0, $totals['total_expected_qty'] - $totals['total_received_qty']) }}</td>
+                                <td colspan="7">Total received</td>
+                                <td class="num">{{ $amazon }}</td>
+                                <td class="num">{{ $noon }}</td>
+                                <td class="num">{{ $namshi }}</td>
                             </tr>
                         </tfoot>
                     @endif

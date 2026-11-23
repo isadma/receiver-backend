@@ -9,20 +9,17 @@ class ExampleTest extends TestCase
 {
     use RefreshDatabase;
 
-    /**
-     * A basic test example.
-     */
     public function test_the_application_returns_a_successful_response(): void
     {
-        $this->get('/')->assertOk()->assertSee('USB2866');
+        $this->asAdmin()->get('/')->assertOk();
     }
 
     public function test_the_api_returns_a_successful_response(): void
     {
-        $response = $this->getJson('/api');
-
-        $response->assertOk()->assertJson([
-            'status' => 'ok',
-        ]);
+        $this->asAdmin()->getJson('/api')
+            ->assertOk()
+            ->assertJson([
+                'status' => 'ok',
+            ]);
     }
 }
