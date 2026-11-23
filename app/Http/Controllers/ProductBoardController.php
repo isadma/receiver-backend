@@ -128,8 +128,8 @@ class ProductBoardController extends Controller
                     $lot?->color,
                     $lot?->color_en,
                     $item->invoice_qty,
-                    $lot?->lot_barcode,
-                    $item->barcode,
+                    $this->excelText($lot?->lot_barcode),
+                    $this->excelText($item->barcode),
                     $lot?->variant,
                     $item->size_code,
                     $lot?->usd,
@@ -172,6 +172,17 @@ class ProductBoardController extends Controller
 
         if ($text !== '' && ! mb_check_encoding($text, 'UTF-8')) {
             $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8,Windows-1251,Windows-1252,ISO-8859-1');
+        }
+
+        return $text;
+    }
+
+    private function excelText(mixed $value): string
+    {
+        $text = $this->csvValue($value);
+
+        if ($text !== '' && ctype_digit($text) && strlen($text) >= 11) {
+            return '="'.$text.'"';
         }
 
         return $text;

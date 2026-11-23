@@ -208,7 +208,7 @@ class CatalogTest extends TestCase
         $found = false;
         foreach (array_slice($lines, 1) as $line) {
             $row = str_getcsv($line);
-            if (($row[$barcodeIndex] ?? null) === '8684000000001') {
+            if (($row[$barcodeIndex] ?? null) === '="8684000000001"') {
                 $this->assertSame('1', $row[$namshiIndex]);
                 $found = true;
             }
