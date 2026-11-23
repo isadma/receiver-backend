@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Receiver</title>
+        <title>Приёмка</title>
+        <link rel="stylesheet" href="https://cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
         <style>
             :root {
                 --bg: #F3EFE6;
@@ -98,71 +99,83 @@
                 background: var(--surface);
                 border-radius: 16px;
                 border: 1px solid var(--border);
+                padding: 16px;
             }
 
-            table {
-                width: 100%;
+            table.dataTable {
+                width: 100% !important;
                 border-collapse: collapse;
-                min-width: 1280px;
             }
 
-            th, td {
-                padding: 10px 12px;
-                text-align: left;
-                border-bottom: 1px solid var(--border);
-                white-space: nowrap;
-            }
-
-            th {
-                position: sticky;
-                top: 0;
+            table.dataTable thead th {
                 background: var(--header);
                 color: #FFFFFF;
                 font-size: 12px;
                 font-weight: 700;
                 letter-spacing: 0.3px;
                 text-transform: uppercase;
+                padding: 10px 12px;
             }
 
-            td {
+            table.dataTable tbody td {
+                padding: 10px 12px;
                 font-size: 14px;
                 font-variant-numeric: tabular-nums;
+                border-bottom: 1px solid var(--border);
+                white-space: nowrap;
             }
 
-            td.name {
+            table.dataTable tbody td.name {
                 white-space: normal;
                 min-width: 160px;
             }
 
-            td.num, th.num {
-                text-align: right;
-            }
-
-            tbody tr:hover {
+            table.dataTable tbody tr:hover td {
                 background: #F8F4EA;
             }
 
-            .empty {
-                color: var(--muted);
+            .dataTables_wrapper .dataTables_filter input,
+            .dataTables_wrapper .dataTables_length select {
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 8px 10px;
+                background: var(--surface);
+                color: var(--text);
             }
 
-            tfoot td {
-                font-weight: 800;
-                background: #E7E1D4;
-                border-bottom: 0;
+            .dataTables_wrapper .dataTables_info,
+            .dataTables_wrapper .dataTables_filter,
+            .dataTables_wrapper .dataTables_length,
+            .dataTables_wrapper .dataTables_paginate {
+                color: var(--muted);
+                padding-top: 12px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                border-radius: 8px !important;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+                background: var(--header) !important;
+                color: #FFFFFF !important;
+                border: 0 !important;
+            }
+
+            th.num, td.num {
+                text-align: right;
             }
         </style>
     </head>
     <body>
         <div class="page">
-            <h1>Receiver</h1>
-            <p class="lede">Scanned lot quantities by size barcode.</p>
+            <h1>Приёмка</h1>
+            <p class="lede">Принятые количества по штрихкодам размеров.</p>
 
             <div class="top">
                 <div class="stats">
                     <div class="stat">
-                        <span>Rows</span>
-                        <strong>{{ $items->count() }}</strong>
+                        <span>Строк</span>
+                        <strong>{{ $rows }}</strong>
                     </div>
                     <div class="stat mapped">
                         <span>Amazon</span>
@@ -177,57 +190,58 @@
                         <strong>{{ $namshi }}</strong>
                     </div>
                 </div>
-                <a class="export" href="{{ url('/export.csv') }}">Download CSV</a>
+                <a class="export" href="{{ url('/export.csv') }}">Скачать CSV</a>
             </div>
 
             <div class="table-wrap">
-                <table>
+                <table id="catalog" class="display nowrap" style="width:100%">
                     <thead>
                         <tr>
-                            <th>Model</th>
-                            <th>Name</th>
-                            <th>Color</th>
-                            <th>Size</th>
-                            <th>Lot barcode</th>
-                            <th>Item barcode</th>
-                            <th class="num">Per lot</th>
+                            <th>Модель</th>
+                            <th>Название</th>
+                            <th>Цвет</th>
+                            <th>Размер</th>
+                            <th>Лот-штрихкод</th>
+                            <th>Штрихкод</th>
+                            <th class="num">В лоте</th>
                             <th class="num">Amazon</th>
                             <th class="num">Noon</th>
                             <th class="num">Namshi</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @forelse ($items as $item)
-                            <tr>
-                                <td>{{ $item->lot?->model }}</td>
-                                <td class="name">{{ $item->lot?->name_en }}</td>
-                                <td>{{ $item->lot?->color_en ?: $item->lot?->color }}</td>
-                                <td>{{ $item->size_code }}</td>
-                                <td>{{ $item->lot?->lot_barcode }}</td>
-                                <td>{{ $item->barcode }}</td>
-                                <td class="num">{{ $item->pieces_per_lot }}</td>
-                                <td class="num">{{ $item->amazon_received_qty }}</td>
-                                <td class="num">{{ $item->noon_received_qty }}</td>
-                                <td class="num">{{ $item->namshi_received_qty }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="10" class="empty">No catalog rows. Run php artisan db:seed.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                    @if ($items->isNotEmpty())
-                        <tfoot>
-                            <tr>
-                                <td colspan="7">Total received</td>
-                                <td class="num">{{ $amazon }}</td>
-                                <td class="num">{{ $noon }}</td>
-                                <td class="num">{{ $namshi }}</td>
-                            </tr>
-                        </tfoot>
-                    @endif
                 </table>
             </div>
         </div>
+
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        <script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
+        <script>
+            new DataTable('#catalog', {
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: @json(url('/datatable')),
+                    type: 'GET',
+                },
+                pageLength: 25,
+                lengthMenu: [10, 25, 50, 100, 250],
+                order: [[4, 'asc']],
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/2.3.2/i18n/ru.json',
+                },
+                columns: [
+                    { data: 'model', name: 'model' },
+                    { data: 'name', name: 'name', className: 'name' },
+                    { data: 'color', name: 'color' },
+                    { data: 'size_code', name: 'size_code' },
+                    { data: 'lot_barcode', name: 'lot_barcode' },
+                    { data: 'barcode', name: 'barcode' },
+                    { data: 'pieces_per_lot', name: 'pieces_per_lot', className: 'num' },
+                    { data: 'amazon_received_qty', name: 'amazon_received_qty', className: 'num' },
+                    { data: 'noon_received_qty', name: 'noon_received_qty', className: 'num' },
+                    { data: 'namshi_received_qty', name: 'namshi_received_qty', className: 'num' },
+                ],
+            });
+        </script>
     </body>
 </html>

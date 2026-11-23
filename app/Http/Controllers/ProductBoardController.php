@@ -4,20 +4,75 @@ namespace App\Http\Controllers;
 
 use App\Models\LotItem;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Yajra\DataTables\Facades\DataTables;
 
 class ProductBoardController extends Controller
 {
     public function index(): View
     {
-        $items = $this->items();
+        $totals = LotItem::query()
+            ->selectRaw('COUNT(*) as rows')
+            ->selectRaw('COALESCE(SUM(amazon_received_qty), 0) as amazon')
+            ->selectRaw('COALESCE(SUM(noon_received_qty), 0) as noon')
+            ->selectRaw('COALESCE(SUM(namshi_received_qty), 0) as namshi')
+            ->first();
 
         return view('products.index', [
-            'items' => $items,
-            'amazon' => $items->sum('amazon_received_qty'),
-            'noon' => $items->sum('noon_received_qty'),
-            'namshi' => $items->sum('namshi_received_qty'),
+            'rows' => (int) ($totals->rows ?? 0),
+            'amazon' => (int) ($totals->amazon ?? 0),
+            'noon' => (int) ($totals->noon ?? 0),
+            'namshi' => (int) ($totals->namshi ?? 0),
         ]);
+    }
+
+    public function datatable(): JsonResponse
+    {
+        $query = LotItem::query()
+            ->join('lots', 'lots.id', '=', 'lot_items.lot_id')
+            ->select([
+                'lot_items.id',
+                'lots.model',
+                'lots.name_ru',
+                'lots.name_en',
+                'lots.color_en',
+                'lots.color',
+                'lot_items.size_code',
+                'lots.lot_barcode',
+                'lot_items.barcode',
+                'lot_items.pieces_per_lot',
+                'lot_items.amazon_received_qty',
+                'lot_items.noon_received_qty',
+                'lot_items.namshi_received_qty',
+            ]);
+
+        return DataTables::of($query)
+            ->addColumn('name', fn ($row) => $row->name_ru ?: $row->name_en)
+            ->addColumn('color', fn ($row) => $row->color_en ?: $row->color)
+            ->filterColumn('name', function ($query, $keyword): void {
+                $like = $this->like($keyword);
+                $query->where(function ($builder) use ($like): void {
+                    $builder->where('lots.name_ru', 'like', $like)
+                        ->orWhere('lots.name_en', 'like', $like);
+                });
+            })
+            ->filterColumn('color', function ($query, $keyword): void {
+                $like = $this->like($keyword);
+                $query->where(function ($builder) use ($like): void {
+                    $builder->where('lots.color_en', 'like', $like)
+                        ->orWhere('lots.color', 'like', $like);
+                });
+            })
+            ->filterColumn('model', fn ($query, $keyword) => $query->where('lots.model', 'like', $this->like($keyword)))
+            ->filterColumn('lot_barcode', fn ($query, $keyword) => $query->where('lots.lot_barcode', 'like', $this->like($keyword)))
+            ->filterColumn('size_code', fn ($query, $keyword) => $query->where('lot_items.size_code', 'like', $this->like($keyword)))
+            ->filterColumn('barcode', fn ($query, $keyword) => $query->where('lot_items.barcode', 'like', $this->like($keyword)))
+            ->orderColumn('name', 'lots.name_ru $1')
+            ->orderColumn('color', 'lots.color_en $1')
+            ->orderColumn('model', 'lots.model $1')
+            ->orderColumn('lot_barcode', 'lots.lot_barcode $1')
+            ->toJson();
     }
 
     public function export(): StreamedResponse
@@ -30,7 +85,9 @@ class ProductBoardController extends Controller
                 return;
             }
 
-            fputcsv($handle, [
+            fwrite($handle, "\xEF\xBB\xBF");
+
+            $this->writeCsvRow($handle, [
                 'FaturaTarih',
                 'Grup',
                 'Marka',
@@ -57,7 +114,7 @@ class ProductBoardController extends Controller
 
             foreach ($this->items() as $item) {
                 $lot = $item->lot;
-                fputcsv($handle, [
+                $this->writeCsvRow($handle, [
                     $lot?->invoice_date,
                     $lot?->group_name,
                     $lot?->brand,
@@ -98,5 +155,30 @@ class ProductBoardController extends Controller
             ->with('lot')
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * @param  resource  $handle
+     * @param  list<mixed>  $fields
+     */
+    private function writeCsvRow($handle, array $fields): void
+    {
+        fputcsv($handle, array_map(fn ($value) => $this->csvValue($value), $fields), ',', '"', '\\', "\r\n");
+    }
+
+    private function csvValue(mixed $value): string
+    {
+        $text = (string) ($value ?? '');
+
+        if ($text !== '' && ! mb_check_encoding($text, 'UTF-8')) {
+            $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8,Windows-1251,Windows-1252,ISO-8859-1');
+        }
+
+        return $text;
+    }
+
+    private function like(string $keyword): string
+    {
+        return '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $keyword).'%';
     }
 }
