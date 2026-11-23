@@ -22,4 +22,15 @@ class ReceiveLotRequest extends FormRequest
             'shop' => ['required', 'string', Rule::exists('shops', 'slug')],
         ];
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'shop.required' => 'Выберите магазин.',
+            'shop.exists' => 'Неизвестный магазин.',
+        ];
+    }
 }

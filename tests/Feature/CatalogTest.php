@@ -20,7 +20,9 @@ class CatalogTest extends TestCase
 
     public function test_unauthenticated_requests_are_rejected(): void
     {
-        $this->getJson('/api/stats')->assertUnauthorized();
+        $this->getJson('/api/stats')
+            ->assertUnauthorized()
+            ->assertJsonPath('message', 'Не авторизован.');
         $this->withBasicAuth('admin', 'wrong')->getJson('/api/stats')->assertUnauthorized();
         $this->get('/')->assertUnauthorized();
         $this->get('/export.csv')->assertUnauthorized();
@@ -78,7 +80,17 @@ class CatalogTest extends TestCase
             'shop' => 'amazon',
         ])
             ->assertNotFound()
-            ->assertJsonPath('message', 'Lot not found.');
+            ->assertJsonPath('message', 'Лот не найден.');
+    }
+
+    public function test_receive_finds_lot_barcode_case_insensitively(): void
+    {
+        $this->asAdmin()->postJson('/api/lots/kvtest01/receive', [
+            'shop' => 'amazon',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.lot_barcode', 'KVTEST01')
+            ->assertJsonPath('data.pieces_added', 7);
     }
 
     public function test_receive_rejects_invalid_shop(): void
@@ -87,7 +99,18 @@ class CatalogTest extends TestCase
             'shop' => 'trendyol',
         ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['shop']);
+            ->assertJsonValidationErrors(['shop'])
+            ->assertJsonPath('errors.shop.0', 'Неизвестный магазин.');
+    }
+
+    public function test_catalog_import_loads_invoice_csv(): void
+    {
+        $this->asAdmin()->postJson('/api/catalog/import')
+            ->assertOk()
+            ->assertJsonPath('data.lots', 204)
+            ->assertJsonPath('data.items', 868);
+
+        $this->assertTrue(Lot::query()->where('lot_barcode', 'KV528264')->exists());
     }
 
     public function test_stats_count_received_pieces_per_shop(): void

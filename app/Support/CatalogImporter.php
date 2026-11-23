@@ -39,7 +39,7 @@ class CatalogImporter
                 }
 
                 $row = self::normalizeRow($raw);
-                $lotBarcode = $row['lot_barcode'];
+                $lotBarcode = strtoupper(trim((string) $row['lot_barcode']));
                 if ($lotBarcode === '') {
                     continue;
                 }
@@ -68,7 +68,7 @@ class CatalogImporter
                     ];
                 }
 
-                $barcode = $row['barcode'];
+                $barcode = trim((string) $row['barcode']);
                 if ($barcode === '' || isset($lots[$lotBarcode]['items'][$barcode])) {
                     continue;
                 }

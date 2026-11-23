@@ -18,4 +18,13 @@ class DemoController extends Controller
             ],
         ]);
     }
+
+    public function import(): JsonResponse
+    {
+        $result = CatalogImporter::import(base_path('data.csv'));
+
+        return response()->json([
+            'data' => $result,
+        ]);
+    }
 }

@@ -14,7 +14,9 @@ class BasicAuth
         $password = (string) config('receiver.basic_password');
 
         if ($request->getUser() !== $user || $request->getPassword() !== $password) {
-            return response('Unauthorized.', 401, [
+            return response()->json([
+                'message' => 'Не авторизован.',
+            ], 401, [
                 'WWW-Authenticate' => 'Basic realm="Receiver"',
             ]);
         }

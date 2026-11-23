@@ -92,12 +92,12 @@ class LotController extends Controller
 
         if ($column === null) {
             throw ValidationException::withMessages([
-                'shop' => 'This shop cannot receive products.',
+                'shop' => 'Этот магазин нельзя использовать для приёмки.',
             ]);
         }
 
         if ($lot->items->isEmpty()) {
-            abort(422, 'This lot has no size barcodes.');
+            abort(422, 'У этого лота нет штрихкодов размеров.');
         }
 
         DB::transaction(function () use ($lot, $column): void {
@@ -131,10 +131,13 @@ class LotController extends Controller
 
     private function findLot(string $lotBarcode): Lot
     {
-        $lot = Lot::query()->where('lot_barcode', $lotBarcode)->first();
+        $normalized = strtoupper(trim($lotBarcode));
+        $lot = $normalized === ''
+            ? null
+            : Lot::query()->whereRaw('UPPER(TRIM(lot_barcode)) = ?', [$normalized])->first();
 
         if ($lot === null) {
-            abort(404, 'Lot not found.');
+            abort(404, 'Лот не найден.');
         }
 
         return $lot;

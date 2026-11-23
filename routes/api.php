@@ -10,6 +10,7 @@ Route::get('/', StatusController::class);
 Route::get('/stats', [LotController::class, 'stats']);
 Route::get('/shops', [ShopController::class, 'index']);
 Route::post('/demo/reset', [DemoController::class, 'reset']);
+Route::post('/catalog/import', [DemoController::class, 'import']);
 
 Route::get('/lots', [LotController::class, 'index']);
 Route::get('/lots/{lotBarcode}', [LotController::class, 'showByBarcode']);
