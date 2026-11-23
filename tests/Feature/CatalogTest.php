@@ -67,11 +67,41 @@ class CatalogTest extends TestCase
 
         $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
             'shop' => 'noon',
+            'allow_repeat' => true,
         ])->assertOk();
 
         $this->assertSame(1, (int) LotItem::query()->where('barcode', '8684000000001')->value('amazon_received_qty'));
         $this->assertSame(1, (int) LotItem::query()->where('barcode', '8684000000001')->value('noon_received_qty'));
         $this->assertSame(2, (int) LotItem::query()->where('barcode', '8684000000002')->value('noon_received_qty'));
+    }
+
+    public function test_duplicate_lot_is_rejected_unless_repeat_is_allowed(): void
+    {
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'amazon',
+        ])->assertOk();
+
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'amazon',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'Этот лот уже принят.');
+
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'noon',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'Этот лот уже принят.');
+
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'noon',
+            'allow_repeat' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.shop', 'noon')
+            ->assertJsonPath('data.pieces_added', 7);
+
+        $this->assertSame(1, (int) LotItem::query()->where('barcode', '8684000000001')->value('noon_received_qty'));
     }
 
     public function test_unknown_lot_is_not_found(): void

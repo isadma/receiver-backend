@@ -100,8 +100,21 @@ class LotController extends Controller
             abort(422, 'У этого лота нет штрихкодов размеров.');
         }
 
-        DB::transaction(function () use ($lot, $column): void {
-            foreach ($lot->items as $item) {
+        $allowRepeat = $request->boolean('allow_repeat');
+
+        DB::transaction(function () use ($lot, $column, $allowRepeat): void {
+            $locked = Lot::query()->whereKey($lot->id)->lockForUpdate()->firstOrFail();
+            $locked->load('items');
+
+            $alreadyReceived = $locked->items->sum(
+                fn (LotItem $item): int => $item->totalReceived()
+            ) > 0;
+
+            if ($alreadyReceived && ! $allowRepeat) {
+                abort(409, 'Этот лот уже принят.');
+            }
+
+            foreach ($locked->items as $item) {
                 LotItem::query()->whereKey($item->id)->increment($column, $item->pieces_per_lot);
             }
         });

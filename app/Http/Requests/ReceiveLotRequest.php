@@ -20,6 +20,7 @@ class ReceiveLotRequest extends FormRequest
     {
         return [
             'shop' => ['required', 'string', Rule::exists('shops', 'slug')],
+            'allow_repeat' => ['sometimes', 'boolean'],
         ];
     }
 
