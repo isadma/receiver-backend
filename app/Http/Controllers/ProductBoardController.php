@@ -13,14 +13,14 @@ class ProductBoardController extends Controller
     public function index(): View
     {
         $totals = LotItem::query()
-            ->selectRaw('COUNT(*) as rows')
+            ->selectRaw('COUNT(*) as row_count')
             ->selectRaw('COALESCE(SUM(amazon_received_qty), 0) as amazon')
             ->selectRaw('COALESCE(SUM(noon_received_qty), 0) as noon')
             ->selectRaw('COALESCE(SUM(namshi_received_qty), 0) as namshi')
             ->first();
 
         return view('products.index', [
-            'rows' => (int) ($totals->rows ?? 0),
+            'rows' => (int) ($totals->row_count ?? 0),
             'amazon' => (int) ($totals->amazon ?? 0),
             'noon' => (int) ($totals->noon ?? 0),
             'namshi' => (int) ($totals->namshi ?? 0),
