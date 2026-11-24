@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReceiveLotRequest;
 use App\Http\Resources\LotResource;
+use App\Models\Box;
 use App\Models\BoxReceipt;
 use App\Models\Lot;
 use App\Models\LotItem;
@@ -103,6 +104,7 @@ class LotController extends Controller
 
         $allowRepeat = $request->boolean('allow_repeat');
         $boxNumber = (string) $request->validated('box');
+        Box::requireOpen($shop->slug, $boxNumber);
 
         DB::transaction(function () use ($lot, $column, $allowRepeat, $shop, $boxNumber): void {
             $locked = Lot::query()->whereKey($lot->id)->lockForUpdate()->firstOrFail();
@@ -162,6 +164,7 @@ class LotController extends Controller
         }
 
         $boxNumber = (string) $request->validated('box');
+        Box::requireOpen($shop->slug, $boxNumber);
 
         DB::transaction(function () use ($item, $column, $shop, $boxNumber): void {
             $locked = LotItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();

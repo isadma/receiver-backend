@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Box;
 use App\Models\BoxReceipt;
 use App\Models\Lot;
 use App\Models\LotItem;
@@ -18,6 +19,15 @@ class CatalogTest extends TestCase
     {
         parent::setUp();
         CatalogImporter::import(base_path('tests/Fixtures/catalog.csv'));
+
+        foreach (['amazon', 'noon', 'namshi'] as $shop) {
+            foreach (['1', '2', 'A-12'] as $number) {
+                Box::query()->firstOrCreate(
+                    ['shop_slug' => $shop, 'box_number' => $number],
+                    ['status' => Box::STATUS_OPEN],
+                );
+            }
+        }
     }
 
     public function test_unauthenticated_requests_are_rejected(): void

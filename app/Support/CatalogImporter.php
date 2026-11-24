@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Box;
 use App\Models\BoxReceipt;
 use App\Models\Lot;
 use App\Models\LotItem;
@@ -87,6 +88,7 @@ class CatalogImporter
 
         DB::transaction(function () use ($lots): void {
             BoxReceipt::query()->delete();
+            Box::query()->delete();
             LotItem::query()->delete();
             Lot::query()->delete();
 
