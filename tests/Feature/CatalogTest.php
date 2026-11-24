@@ -251,11 +251,17 @@ class CatalogTest extends TestCase
             ->assertOk()
             ->assertSee('Приёмка')
             ->assertSee('Короба')
+            ->assertSee('Разных лотов')
+            ->assertSee('Лотов всего')
             ->assertSee('По коробам')
             ->assertSee('Пока нет коробов.')
             ->assertSee('Магазин')
             ->assertSee('Короб')
             ->assertSee('Скачать Excel')
+            ->assertSee('Все магазины')
+            ->assertSee('Все короба')
+            ->assertSee('id="filter-shop"', false)
+            ->assertSee('id="filter-box"', false)
             ->assertSee('id="catalog"', false)
             ->assertSee('/datatable');
     }
@@ -275,24 +281,39 @@ class CatalogTest extends TestCase
             'box' => '1',
             'allow_repeat' => true,
         ])->assertOk();
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+            'allow_repeat' => true,
+        ])->assertOk();
 
         $this->asAdmin()->get('/')
             ->assertOk()
             ->assertDontSee('Пока нет коробов.')
             ->assertSeeInOrder([
+                'Штук',
+                '25',
+                'Разных лотов',
+                '2',
+                'Лотов всего',
+                '4',
                 'По коробам',
                 'Amazon',
                 'Короб 1',
-                '11',
+                '18',
                 'штук',
                 '2',
-                'лотов',
+                'разных лотов',
+                '3',
+                'лотов всего',
                 'Noon',
                 'Короб 1',
                 '7',
                 'штук',
                 '1',
-                'лотов',
+                'разных лотов',
+                '1',
+                'лотов всего',
             ]);
     }
 
@@ -320,6 +341,47 @@ class CatalogTest extends TestCase
             && ($row['barcode'] ?? null) === '8684000000001'
             && (int) ($row['qty'] ?? 0) === 1));
         $this->assertTrue(collect($data)->contains(fn (array $row): bool => ($row['model'] ?? null) === 'AR3697-S'));
+    }
+
+    public function test_datatable_filters_by_shop_and_box(): void
+    {
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])->assertOk();
+        $this->asAdmin()->postJson('/api/lots/KVSHIFT1/receive', [
+            'shop' => 'amazon',
+            'box' => 'A-12',
+        ])->assertOk();
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'noon',
+            'box' => '1',
+            'allow_repeat' => true,
+        ])->assertOk();
+
+        $amazon = $this->asAdmin()->getJson('/datatable?'.$this->datatableQuery('', [
+            'shop' => 'amazon',
+        ]))->assertOk();
+        $this->assertSame(8, $amazon->json('recordsFiltered'));
+        $this->assertTrue(collect($amazon->json('data'))->every(fn (array $row): bool => ($row['shop'] ?? null) === 'Amazon'));
+
+        $amazonBox = $this->asAdmin()->getJson('/datatable?'.$this->datatableQuery('', [
+            'shop' => 'amazon',
+            'box_number' => '1',
+        ]))->assertOk();
+        $this->assertSame(4, $amazonBox->json('recordsFiltered'));
+        $this->assertTrue(collect($amazonBox->json('data'))->every(
+            fn (array $row): bool => ($row['shop'] ?? null) === 'Amazon' && ($row['box_number'] ?? null) === '1'
+        ));
+
+        $noonBox = $this->asAdmin()->getJson('/datatable?'.$this->datatableQuery('', [
+            'shop' => 'noon',
+            'box_number' => '1',
+        ]))->assertOk();
+        $this->assertSame(4, $noonBox->json('recordsFiltered'));
+        $this->assertTrue(collect($noonBox->json('data'))->every(
+            fn (array $row): bool => ($row['shop'] ?? null) === 'Noon' && ($row['box_number'] ?? null) === '1'
+        ));
     }
 
     public function test_excel_export_includes_shop_box_barcode_and_qty(): void
@@ -384,7 +446,10 @@ class CatalogTest extends TestCase
             ->assertJson(['status' => 'ok']);
     }
 
-    private function datatableQuery(string $search = ''): string
+    /**
+     * @param  array<string, string>  $columnSearch
+     */
+    private function datatableQuery(string $search = '', array $columnSearch = []): string
     {
         $columns = [
             'shop',
@@ -418,7 +483,7 @@ class CatalogTest extends TestCase
                 'searchable' => 'true',
                 'orderable' => 'true',
                 'search' => [
-                    'value' => '',
+                    'value' => $columnSearch[$name] ?? '',
                     'regex' => 'false',
                 ],
             ];

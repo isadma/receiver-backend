@@ -6,6 +6,7 @@ use App\Models\BoxReceipt;
 use App\Models\LotItem;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -21,14 +22,18 @@ class ProductBoardController extends Controller
             ->selectRaw('COALESCE(SUM(noon_received_qty), 0) as noon')
             ->selectRaw('COALESCE(SUM(namshi_received_qty), 0) as namshi')
             ->first();
+        $lotScans = $this->lotScans();
 
         return view('products.index', [
             'rows' => BoxReceipt::query()->count(),
             'boxes' => BoxReceipt::query()->select('shop_slug', 'box_number')->distinct()->get()->count(),
+            'qty' => (int) $lotScans->sum('items'),
+            'differentLots' => $lotScans->pluck('lot_id')->unique()->count(),
+            'scannedLots' => (int) round((float) $lotScans->sum('scans')),
             'amazon' => (int) ($totals->amazon ?? 0),
             'noon' => (int) ($totals->noon ?? 0),
             'namshi' => (int) ($totals->namshi ?? 0),
-            'boxStats' => $this->boxStats(),
+            'boxStats' => $this->boxStats($lotScans),
         ]);
     }
 
@@ -61,8 +66,16 @@ class ProductBoardController extends Controller
             })
             ->addColumn('name', fn ($row) => $row->name_ru ?: $row->name_en)
             ->addColumn('color', fn ($row) => $row->color_en ?: $row->color)
-            ->filterColumn('shop', fn ($query, $keyword) => $query->where('box_receipts.shop_slug', 'like', $this->like($keyword)))
-            ->filterColumn('box_number', fn ($query, $keyword) => $query->where('box_receipts.box_number', 'like', $this->like($keyword)))
+            ->filterColumn('shop', function ($query, $keyword): void {
+                $slug = match (mb_strtolower(trim($keyword))) {
+                    'amazon' => 'amazon',
+                    'noon' => 'noon',
+                    'namshi' => 'namshi',
+                    default => trim($keyword),
+                };
+                $query->where('box_receipts.shop_slug', $slug);
+            })
+            ->filterColumn('box_number', fn ($query, $keyword) => $query->where('box_receipts.box_number', trim($keyword)))
             ->filterColumn('name', function ($query, $keyword): void {
                 $like = $this->like($keyword);
                 $query->where(function ($builder) use ($like): void {
@@ -145,30 +158,48 @@ class ProductBoardController extends Controller
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, array{shop: string, shop_slug: string, box: string, items: int, lots: int}>
+     * One row per shop + box + lot, with piece qty and how many times that lot was scanned.
+     *
+     * @return Collection<int, object{shop_slug: string, box_number: string, lot_id: int, items: int|float|string, scans: int|float|string|null}>
      */
-    private function boxStats()
+    private function lotScans(): Collection
     {
         return BoxReceipt::query()
-            ->select('shop_slug', 'box_number')
-            ->selectRaw('COALESCE(SUM(qty), 0) as items')
-            ->selectRaw('COUNT(DISTINCT lot_id) as lots')
-            ->groupBy('shop_slug', 'box_number')
-            ->orderBy('shop_slug')
-            ->orderBy('box_number')
-            ->get()
-            ->map(fn ($row): array => [
-                'shop' => match ($row->shop_slug) {
-                    'amazon' => 'Amazon',
-                    'noon' => 'Noon',
-                    'namshi' => 'Namshi',
-                    default => $row->shop_slug,
-                },
-                'shop_slug' => $row->shop_slug,
-                'box' => $row->box_number,
-                'items' => (int) $row->items,
-                'lots' => (int) $row->lots,
-            ]);
+            ->join('lot_items', 'lot_items.id', '=', 'box_receipts.lot_item_id')
+            ->select('box_receipts.shop_slug', 'box_receipts.box_number', 'box_receipts.lot_id')
+            ->selectRaw('COALESCE(SUM(box_receipts.qty), 0) as items')
+            ->selectRaw('MAX(box_receipts.qty / NULLIF(lot_items.pieces_per_lot, 0)) as scans')
+            ->groupBy('box_receipts.shop_slug', 'box_receipts.box_number', 'box_receipts.lot_id')
+            ->get();
+    }
+
+    /**
+     * @param  Collection<int, object{shop_slug: string, box_number: string, lot_id: int, items: int|float|string, scans: int|float|string|null}>  $lotScans
+     * @return Collection<int, array{shop: string, shop_slug: string, box: string, items: int, different_lots: int, scanned_lots: int}>
+     */
+    private function boxStats(Collection $lotScans): Collection
+    {
+        return $lotScans
+            ->groupBy(fn ($row) => $row->shop_slug.'|'.$row->box_number)
+            ->map(function (Collection $rows): array {
+                $first = $rows->first();
+
+                return [
+                    'shop' => match ($first->shop_slug) {
+                        'amazon' => 'Amazon',
+                        'noon' => 'Noon',
+                        'namshi' => 'Namshi',
+                        default => $first->shop_slug,
+                    },
+                    'shop_slug' => $first->shop_slug,
+                    'box' => $first->box_number,
+                    'items' => (int) $rows->sum('items'),
+                    'different_lots' => $rows->count(),
+                    'scanned_lots' => (int) round((float) $rows->sum('scans')),
+                ];
+            })
+            ->sortBy(fn (array $row): string => $row['shop_slug']."\t".$row['box'])
+            ->values();
     }
 
     /**

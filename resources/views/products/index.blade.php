@@ -92,7 +92,7 @@
 
             .box-stats {
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
                 gap: 10px;
                 margin-bottom: 20px;
             }
@@ -146,6 +146,40 @@
             .box-stats-empty {
                 margin: 0 0 20px;
                 color: var(--muted);
+            }
+
+            .filters {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                align-items: end;
+                margin-bottom: 12px;
+            }
+
+            .filter {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                min-width: 180px;
+            }
+
+            .filter span {
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.4px;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            .filter select {
+                min-height: 44px;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 8px 12px;
+                background: var(--surface);
+                color: var(--text);
+                font-size: 15px;
+                font-weight: 600;
             }
 
             .export {
@@ -246,6 +280,18 @@
                         <strong>{{ $boxes }}</strong>
                     </div>
                     <div class="stat mapped">
+                        <span>Штук</span>
+                        <strong>{{ $qty }}</strong>
+                    </div>
+                    <div class="stat">
+                        <span>Разных лотов</span>
+                        <strong>{{ $differentLots }}</strong>
+                    </div>
+                    <div class="stat">
+                        <span>Лотов всего</span>
+                        <strong>{{ $scannedLots }}</strong>
+                    </div>
+                    <div class="stat mapped">
                         <span>Amazon</span>
                         <strong>{{ $amazon }}</strong>
                     </div>
@@ -276,14 +322,36 @@
                                     <small>штук</small>
                                 </div>
                                 <div>
-                                    <strong>{{ $box['lots'] }}</strong>
-                                    <small>лотов</small>
+                                    <strong>{{ $box['different_lots'] }}</strong>
+                                    <small>разных лотов</small>
+                                </div>
+                                <div>
+                                    <strong>{{ $box['scanned_lots'] }}</strong>
+                                    <small>лотов всего</small>
                                 </div>
                             </div>
                         </div>
                     @endforeach
                 </div>
             @endif
+
+            <div class="filters">
+                <label class="filter">
+                    <span>Магазин</span>
+                    <select id="filter-shop">
+                        <option value="">Все магазины</option>
+                        <option value="amazon">Amazon</option>
+                        <option value="noon">Noon</option>
+                        <option value="namshi">Namshi</option>
+                    </select>
+                </label>
+                <label class="filter">
+                    <span>Короб</span>
+                    <select id="filter-box">
+                        <option value="">Все короба</option>
+                    </select>
+                </label>
+            </div>
 
             <div class="table-wrap">
                 <table id="catalog" class="display nowrap" style="width:100%">
@@ -307,7 +375,50 @@
         <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
         <script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
         <script>
-            new DataTable('#catalog', {
+            const boxFilters = @json($boxStats->map(fn ($box) => [
+                'shop_slug' => $box['shop_slug'],
+                'box' => $box['box'],
+            ])->values());
+            const shopSelect = document.getElementById('filter-shop');
+            const boxSelect = document.getElementById('filter-box');
+
+            function boxesForShop(shop) {
+                const seen = new Set();
+                const boxes = [];
+
+                boxFilters.forEach((item) => {
+                    if ((shop && item.shop_slug !== shop) || seen.has(item.box)) {
+                        return;
+                    }
+                    seen.add(item.box);
+                    boxes.push(item.box);
+                });
+
+                return boxes;
+            }
+
+            function refreshBoxOptions() {
+                const shop = shopSelect.value;
+                const current = boxSelect.value;
+                const boxes = boxesForShop(shop);
+
+                boxSelect.innerHTML = '';
+                const all = document.createElement('option');
+                all.value = '';
+                all.textContent = 'Все короба';
+                boxSelect.appendChild(all);
+
+                boxes.forEach((box) => {
+                    const option = document.createElement('option');
+                    option.value = box;
+                    option.textContent = box;
+                    boxSelect.appendChild(option);
+                });
+
+                boxSelect.value = boxes.includes(current) ? current : '';
+            }
+
+            const table = new DataTable('#catalog', {
                 processing: true,
                 serverSide: true,
                 ajax: {
@@ -332,6 +443,19 @@
                     { data: 'qty', name: 'qty', className: 'num' },
                 ],
             });
+
+            function applyFilters() {
+                table.column(0).search(shopSelect.value);
+                table.column(1).search(boxSelect.value);
+                table.draw();
+            }
+
+            refreshBoxOptions();
+            shopSelect.addEventListener('change', () => {
+                refreshBoxOptions();
+                applyFilters();
+            });
+            boxSelect.addEventListener('change', applyFilters);
         </script>
     </body>
 </html>
