@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReceiveLotRequest;
 use App\Http\Resources\LotResource;
+use App\Models\BoxReceipt;
 use App\Models\Lot;
 use App\Models\LotItem;
 use App\Models\Shop;
@@ -101,8 +102,9 @@ class LotController extends Controller
         }
 
         $allowRepeat = $request->boolean('allow_repeat');
+        $boxNumber = (string) $request->validated('box');
 
-        DB::transaction(function () use ($lot, $column, $allowRepeat): void {
+        DB::transaction(function () use ($lot, $column, $allowRepeat, $shop, $boxNumber): void {
             $locked = Lot::query()->whereKey($lot->id)->lockForUpdate()->firstOrFail();
             $locked->load('items');
 
@@ -116,6 +118,19 @@ class LotController extends Controller
 
             foreach ($locked->items as $item) {
                 LotItem::query()->whereKey($item->id)->increment($column, $item->pieces_per_lot);
+
+                $receipt = BoxReceipt::query()->firstOrCreate(
+                    [
+                        'shop_slug' => $shop->slug,
+                        'box_number' => $boxNumber,
+                        'lot_item_id' => $item->id,
+                    ],
+                    [
+                        'lot_id' => $locked->id,
+                        'qty' => 0,
+                    ],
+                );
+                $receipt->increment('qty', $item->pieces_per_lot);
             }
         });
 
@@ -127,6 +142,7 @@ class LotController extends Controller
                 ... (new LotResource($lot))->resolve(),
                 'shop' => $shop->slug,
                 'shop_name' => $shop->name,
+                'box' => $boxNumber,
                 'pieces_added' => $added,
                 'items' => $lot->items->map(fn (LotItem $item): array => [
                     'barcode' => $item->barcode,

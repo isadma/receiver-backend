@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\BoxReceipt;
 use App\Models\Lot;
 use App\Models\LotItem;
 use Illuminate\Support\Facades\DB;
@@ -85,6 +86,7 @@ class CatalogImporter
         }
 
         DB::transaction(function () use ($lots): void {
+            BoxReceipt::query()->delete();
             LotItem::query()->delete();
             Lot::query()->delete();
 
@@ -105,6 +107,7 @@ class CatalogImporter
 
     public static function resetReceived(): void
     {
+        BoxReceipt::query()->delete();
         LotItem::query()->update([
             'amazon_received_qty' => 0,
             'noon_received_qty' => 0,

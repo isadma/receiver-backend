@@ -169,13 +169,17 @@
     <body>
         <div class="page">
             <h1>Приёмка</h1>
-            <p class="lede">Принятые количества по штрихкодам размеров.</p>
+            <p class="lede">Какой штрихкод в каком коробе и сколько штук.</p>
 
             <div class="top">
                 <div class="stats">
                     <div class="stat">
                         <span>Строк</span>
                         <strong>{{ $rows }}</strong>
+                    </div>
+                    <div class="stat">
+                        <span>Короба</span>
+                        <strong>{{ $boxes }}</strong>
                     </div>
                     <div class="stat mapped">
                         <span>Amazon</span>
@@ -197,16 +201,15 @@
                 <table id="catalog" class="display nowrap" style="width:100%">
                     <thead>
                         <tr>
+                            <th>Магазин</th>
+                            <th>Короб</th>
                             <th>Модель</th>
                             <th>Название</th>
                             <th>Цвет</th>
                             <th>Размер</th>
                             <th>Лот-штрихкод</th>
                             <th>Штрихкод</th>
-                            <th class="num">В лоте</th>
-                            <th class="num">Amazon</th>
-                            <th class="num">Noon</th>
-                            <th class="num">Namshi</th>
+                            <th class="num">Кол-во</th>
                         </tr>
                     </thead>
                 </table>
@@ -225,21 +228,20 @@
                 },
                 pageLength: 25,
                 lengthMenu: [10, 25, 50, 100, 250],
-                order: [[4, 'asc']],
+                order: [[0, 'asc'], [1, 'asc']],
                 language: {
                     url: 'https://cdn.datatables.net/plug-ins/2.3.2/i18n/ru.json',
                 },
                 columns: [
+                    { data: 'shop', name: 'shop' },
+                    { data: 'box_number', name: 'box_number' },
                     { data: 'model', name: 'model' },
                     { data: 'name', name: 'name', className: 'name' },
                     { data: 'color', name: 'color' },
                     { data: 'size_code', name: 'size_code' },
                     { data: 'lot_barcode', name: 'lot_barcode' },
                     { data: 'barcode', name: 'barcode' },
-                    { data: 'pieces_per_lot', name: 'pieces_per_lot', className: 'num' },
-                    { data: 'amazon_received_qty', name: 'amazon_received_qty', className: 'num' },
-                    { data: 'noon_received_qty', name: 'noon_received_qty', className: 'num' },
-                    { data: 'namshi_received_qty', name: 'namshi_received_qty', className: 'num' },
+                    { data: 'qty', name: 'qty', className: 'num' },
                 ],
             });
         </script>

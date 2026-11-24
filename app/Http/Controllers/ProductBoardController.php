@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BoxReceipt;
 use App\Models\LotItem;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -16,14 +17,14 @@ class ProductBoardController extends Controller
     public function index(): View
     {
         $totals = LotItem::query()
-            ->selectRaw('COUNT(*) as row_count')
             ->selectRaw('COALESCE(SUM(amazon_received_qty), 0) as amazon')
             ->selectRaw('COALESCE(SUM(noon_received_qty), 0) as noon')
             ->selectRaw('COALESCE(SUM(namshi_received_qty), 0) as namshi')
             ->first();
 
         return view('products.index', [
-            'rows' => (int) ($totals->row_count ?? 0),
+            'rows' => BoxReceipt::query()->count(),
+            'boxes' => BoxReceipt::query()->select('shop_slug', 'box_number')->distinct()->get()->count(),
             'amazon' => (int) ($totals->amazon ?? 0),
             'noon' => (int) ($totals->noon ?? 0),
             'namshi' => (int) ($totals->namshi ?? 0),
@@ -32,10 +33,14 @@ class ProductBoardController extends Controller
 
     public function datatable(): JsonResponse
     {
-        $query = LotItem::query()
-            ->join('lots', 'lots.id', '=', 'lot_items.lot_id')
+        $query = BoxReceipt::query()
+            ->join('lot_items', 'lot_items.id', '=', 'box_receipts.lot_item_id')
+            ->join('lots', 'lots.id', '=', 'box_receipts.lot_id')
             ->select([
-                'lot_items.id',
+                'box_receipts.id',
+                'box_receipts.shop_slug',
+                'box_receipts.box_number',
+                'box_receipts.qty',
                 'lots.model',
                 'lots.name_ru',
                 'lots.name_en',
@@ -44,15 +49,19 @@ class ProductBoardController extends Controller
                 'lot_items.size_code',
                 'lots.lot_barcode',
                 'lot_items.barcode',
-                'lot_items.pieces_per_lot',
-                'lot_items.amazon_received_qty',
-                'lot_items.noon_received_qty',
-                'lot_items.namshi_received_qty',
             ]);
 
         return DataTables::of($query)
+            ->addColumn('shop', fn ($row) => match ($row->shop_slug) {
+                'amazon' => 'Amazon',
+                'noon' => 'Noon',
+                'namshi' => 'Namshi',
+                default => $row->shop_slug,
+            })
             ->addColumn('name', fn ($row) => $row->name_ru ?: $row->name_en)
             ->addColumn('color', fn ($row) => $row->color_en ?: $row->color)
+            ->filterColumn('shop', fn ($query, $keyword) => $query->where('box_receipts.shop_slug', 'like', $this->like($keyword)))
+            ->filterColumn('box_number', fn ($query, $keyword) => $query->where('box_receipts.box_number', 'like', $this->like($keyword)))
             ->filterColumn('name', function ($query, $keyword): void {
                 $like = $this->like($keyword);
                 $query->where(function ($builder) use ($like): void {
@@ -71,6 +80,8 @@ class ProductBoardController extends Controller
             ->filterColumn('lot_barcode', fn ($query, $keyword) => $query->where('lots.lot_barcode', 'like', $this->like($keyword)))
             ->filterColumn('size_code', fn ($query, $keyword) => $query->where('lot_items.size_code', 'like', $this->like($keyword)))
             ->filterColumn('barcode', fn ($query, $keyword) => $query->where('lot_items.barcode', 'like', $this->like($keyword)))
+            ->orderColumn('shop', 'box_receipts.shop_slug $1')
+            ->orderColumn('box_number', 'box_receipts.box_number $1')
             ->orderColumn('name', 'lots.name_ru $1')
             ->orderColumn('color', 'lots.color_en $1')
             ->orderColumn('model', 'lots.model $1')
@@ -88,65 +99,40 @@ class ProductBoardController extends Controller
             $sheet->setTitle('Приёмка');
 
             $sheet->fromArray([
-                'FaturaTarih',
-                'Grup',
-                'Marka',
-                'Model No',
-                'Asorti',
-                'BedenSeti',
-                'Kumaş İngilizce',
-                'İngilizce Tanım',
-                'Rusca Tanım',
-                'LotAdeti',
-                'Renk',
-                'İngilizce Renk',
-                'Adet',
-                'Lot Barkod',
-                'Barkod',
-                'Varyant',
-                'BedenKodu',
-                'USD',
-                'Döviz',
-                'amazon_received_qty',
-                'noon_received_qty',
-                'namshi_received_qty',
+                'Магазин',
+                'Короб',
+                'Модель',
+                'Название',
+                'Цвет',
+                'Размер',
+                'Лот-штрихкод',
+                'Штрихкод',
+                'Кол-во',
             ], null, 'A1');
 
             $row = 2;
-            foreach ($this->items() as $item) {
-                $lot = $item->lot;
+            foreach ($this->receipts() as $receipt) {
+                $lot = $receipt->lot;
+                $item = $receipt->item;
 
                 $sheet->fromArray([[
-                    $lot?->invoice_date,
-                    $lot?->group_name,
-                    $lot?->brand,
+                    $receipt->shopName(),
+                    $receipt->box_number,
                     $lot?->model,
-                    $lot?->assortment,
-                    $lot?->size_set,
-                    $lot?->fabric_en,
-                    $lot?->name_en,
-                    $lot?->name_ru,
-                    $lot?->invoice_lot_qty,
-                    $lot?->color,
-                    $lot?->color_en,
-                    $item->invoice_qty,
+                    $lot?->name_ru ?: $lot?->name_en,
+                    $lot?->color_en ?: $lot?->color,
+                    $item?->size_code,
                     null,
                     null,
-                    $lot?->variant,
-                    $item->size_code,
-                    $lot?->usd,
-                    $lot?->currency,
-                    $item->amazon_received_qty,
-                    $item->noon_received_qty,
-                    $item->namshi_received_qty,
+                    $receipt->qty,
                 ]], null, 'A'.$row);
 
-                $sheet->setCellValueExplicit('N'.$row, (string) ($lot?->lot_barcode ?? ''), DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('O'.$row, (string) $item->barcode, DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('G'.$row, (string) ($lot?->lot_barcode ?? ''), DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('H'.$row, (string) ($item?->barcode ?? ''), DataType::TYPE_STRING);
                 $row++;
             }
 
-            foreach (range('A', 'V') as $column) {
+            foreach (range('A', 'I') as $column) {
                 $sheet->getColumnDimension($column)->setAutoSize(true);
             }
 
@@ -158,12 +144,14 @@ class ProductBoardController extends Controller
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, LotItem>
+     * @return \Illuminate\Support\Collection<int, BoxReceipt>
      */
-    private function items()
+    private function receipts()
     {
-        return LotItem::query()
-            ->with('lot')
+        return BoxReceipt::query()
+            ->with(['lot', 'item'])
+            ->orderBy('shop_slug')
+            ->orderBy('box_number')
             ->orderBy('id')
             ->get();
     }
