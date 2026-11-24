@@ -190,7 +190,7 @@
                         <strong>{{ $namshi }}</strong>
                     </div>
                 </div>
-                <a class="export" href="{{ url('/export.csv') }}">Скачать CSV</a>
+                <a class="export" href="{{ url('/export.xlsx') }}">Скачать Excel</a>
             </div>
 
             <div class="table-wrap">

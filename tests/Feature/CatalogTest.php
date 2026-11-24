@@ -6,6 +6,7 @@ use App\Models\Lot;
 use App\Models\LotItem;
 use App\Support\CatalogImporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class CatalogTest extends TestCase
@@ -26,7 +27,7 @@ class CatalogTest extends TestCase
         $this->withBasicAuth('admin', 'wrong')->getJson('/api/stats')->assertUnauthorized();
         $this->get('/')->assertUnauthorized();
         $this->get('/datatable')->assertUnauthorized();
-        $this->get('/export.csv')->assertUnauthorized();
+        $this->get('/export.xlsx')->assertUnauthorized();
     }
 
     public function test_import_repairs_shifted_rows_and_sets_pieces_per_lot(): void
@@ -163,7 +164,7 @@ class CatalogTest extends TestCase
         $this->asAdmin()->get('/')
             ->assertOk()
             ->assertSee('Приёмка')
-            ->assertSee('Скачать CSV')
+            ->assertSee('Скачать Excel')
             ->assertSee('id="catalog"', false)
             ->assertSee('/datatable');
     }
@@ -181,39 +182,39 @@ class CatalogTest extends TestCase
         $this->assertTrue(collect($data)->contains(fn (array $row): bool => ($row['model'] ?? null) === 'AR3697-S'));
     }
 
-    public function test_csv_export_includes_shop_received_columns(): void
+    public function test_excel_export_includes_shop_received_columns(): void
     {
         $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', ['shop' => 'namshi']);
 
-        $csv = $this->asAdmin()->get('/export.csv')->assertOk()->streamedContent();
+        $contents = $this->asAdmin()->get('/export.xlsx')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->streamedContent();
 
-        $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
-        $this->assertStringContainsString('Бермудская команда', $csv);
-        $this->assertTrue(mb_check_encoding($csv, 'UTF-8'));
-        $this->assertStringContainsString('amazon_received_qty', $csv);
-        $this->assertStringContainsString('noon_received_qty', $csv);
-        $this->assertStringContainsString('namshi_received_qty', $csv);
-        $this->assertStringContainsString('KVTEST01', $csv);
-        $this->assertStringContainsString('8684000000001', $csv);
-        $this->assertStringContainsString('namshi_received_qty', $csv);
+        $path = tempnam(sys_get_temp_dir(), 'receiver').'.xlsx';
+        file_put_contents($path, $contents);
 
-        $csv = preg_replace('/^\xEF\xBB\xBF/', '', $csv) ?? $csv;
-        $lines = array_values(array_filter(preg_split("/\r\n|\n|\r/", $csv)));
-        $header = str_getcsv($lines[0]);
-        $this->assertContains('Lot Barkod', $header);
-        $this->assertContains('namshi_received_qty', $header);
+        try {
+            $sheet = IOFactory::load($path)->getActiveSheet();
+            $this->assertSame('Lot Barkod', $sheet->getCell('N1')->getValue());
+            $this->assertSame('Barkod', $sheet->getCell('O1')->getValue());
+            $this->assertSame('namshi_received_qty', $sheet->getCell('V1')->getValue());
 
-        $namshiIndex = array_search('namshi_received_qty', $header, true);
-        $barcodeIndex = array_search('Barkod', $header, true);
-        $found = false;
-        foreach (array_slice($lines, 1) as $line) {
-            $row = str_getcsv($line);
-            if (($row[$barcodeIndex] ?? null) === '="8684000000001"') {
-                $this->assertSame('1', $row[$namshiIndex]);
-                $found = true;
+            $found = false;
+            foreach ($sheet->getRowIterator(2) as $row) {
+                $index = $row->getRowIndex();
+                if ((string) $sheet->getCell('O'.$index)->getValue() === '8684000000001') {
+                    $this->assertSame('KVTEST01', (string) $sheet->getCell('N'.$index)->getValue());
+                    $this->assertSame('Бермудская команда', (string) $sheet->getCell('I'.$index)->getValue());
+                    $this->assertSame('1', (string) $sheet->getCell('V'.$index)->getValue());
+                    $found = true;
+                    break;
+                }
             }
+            $this->assertTrue($found);
+        } finally {
+            @unlink($path);
         }
-        $this->assertTrue($found);
     }
 
     public function test_reset_clears_received_qty_and_keeps_catalog(): void

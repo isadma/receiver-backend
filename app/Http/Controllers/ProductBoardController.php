@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\LotItem;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -77,17 +80,14 @@ class ProductBoardController extends Controller
 
     public function export(): StreamedResponse
     {
-        $filename = 'receiver-'.now()->format('Y-m-d-His').'.csv';
+        $filename = 'receiver-'.now()->format('Y-m-d-His').'.xlsx';
 
         return response()->streamDownload(function () {
-            $handle = fopen('php://output', 'w');
-            if ($handle === false) {
-                return;
-            }
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Приёмка');
 
-            fwrite($handle, "\xEF\xBB\xBF");
-
-            $this->writeCsvRow($handle, [
+            $sheet->fromArray([
                 'FaturaTarih',
                 'Grup',
                 'Marka',
@@ -110,11 +110,13 @@ class ProductBoardController extends Controller
                 'amazon_received_qty',
                 'noon_received_qty',
                 'namshi_received_qty',
-            ]);
+            ], null, 'A1');
 
+            $row = 2;
             foreach ($this->items() as $item) {
                 $lot = $item->lot;
-                $this->writeCsvRow($handle, [
+
+                $sheet->fromArray([[
                     $lot?->invoice_date,
                     $lot?->group_name,
                     $lot?->brand,
@@ -128,8 +130,8 @@ class ProductBoardController extends Controller
                     $lot?->color,
                     $lot?->color_en,
                     $item->invoice_qty,
-                    $this->excelText($lot?->lot_barcode),
-                    $this->excelText($item->barcode),
+                    null,
+                    null,
                     $lot?->variant,
                     $item->size_code,
                     $lot?->usd,
@@ -137,12 +139,21 @@ class ProductBoardController extends Controller
                     $item->amazon_received_qty,
                     $item->noon_received_qty,
                     $item->namshi_received_qty,
-                ]);
+                ]], null, 'A'.$row);
+
+                $sheet->setCellValueExplicit('N'.$row, (string) ($lot?->lot_barcode ?? ''), DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('O'.$row, (string) $item->barcode, DataType::TYPE_STRING);
+                $row++;
             }
 
-            fclose($handle);
+            foreach (range('A', 'V') as $column) {
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
         }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 
@@ -155,37 +166,6 @@ class ProductBoardController extends Controller
             ->with('lot')
             ->orderBy('id')
             ->get();
-    }
-
-    /**
-     * @param  resource  $handle
-     * @param  list<mixed>  $fields
-     */
-    private function writeCsvRow($handle, array $fields): void
-    {
-        fputcsv($handle, array_map(fn ($value) => $this->csvValue($value), $fields), ',', '"', '\\', "\r\n");
-    }
-
-    private function csvValue(mixed $value): string
-    {
-        $text = (string) ($value ?? '');
-
-        if ($text !== '' && ! mb_check_encoding($text, 'UTF-8')) {
-            $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8,Windows-1251,Windows-1252,ISO-8859-1');
-        }
-
-        return $text;
-    }
-
-    private function excelText(mixed $value): string
-    {
-        $text = $this->csvValue($value);
-
-        if ($text !== '' && ctype_digit($text) && strlen($text) >= 11) {
-            return '="'.$text.'"';
-        }
-
-        return $text;
     }
 
     private function like(string $keyword): string
