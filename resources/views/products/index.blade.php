@@ -84,6 +84,70 @@
 
             .stat.mapped strong { color: var(--mapped); }
 
+            .section-title {
+                margin: 8px 0 12px;
+                font-size: 18px;
+                font-weight: 800;
+            }
+
+            .box-stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+
+            .box-stat {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                padding: 14px 16px;
+            }
+
+            .box-stat-label {
+                display: block;
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.4px;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            .box-stat-title {
+                margin: 6px 0 12px;
+                font-size: 22px;
+                font-weight: 800;
+            }
+
+            .box-stat-nums {
+                display: flex;
+                gap: 18px;
+            }
+
+            .box-stat-nums div {
+                min-width: 72px;
+            }
+
+            .box-stat-nums strong {
+                display: block;
+                font-size: 28px;
+                font-variant-numeric: tabular-nums;
+                color: var(--mapped);
+            }
+
+            .box-stat-nums small {
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.3px;
+                text-transform: uppercase;
+            }
+
+            .box-stats-empty {
+                margin: 0 0 20px;
+                color: var(--muted);
+            }
+
             .export {
                 display: inline-block;
                 background: var(--header);
@@ -196,6 +260,30 @@
                 </div>
                 <a class="export" href="{{ url('/export.xlsx') }}">Скачать Excel</a>
             </div>
+
+            <h2 class="section-title">По коробам</h2>
+            @if ($boxStats->isEmpty())
+                <p class="box-stats-empty">Пока нет коробов.</p>
+            @else
+                <div class="box-stats">
+                    @foreach ($boxStats as $box)
+                        <div class="box-stat">
+                            <span class="box-stat-label">{{ $box['shop'] }}</span>
+                            <div class="box-stat-title">Короб {{ $box['box'] }}</div>
+                            <div class="box-stat-nums">
+                                <div>
+                                    <strong>{{ $box['items'] }}</strong>
+                                    <small>штук</small>
+                                </div>
+                                <div>
+                                    <strong>{{ $box['lots'] }}</strong>
+                                    <small>лотов</small>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
 
             <div class="table-wrap">
                 <table id="catalog" class="display nowrap" style="width:100%">

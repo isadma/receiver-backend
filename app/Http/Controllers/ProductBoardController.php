@@ -28,6 +28,7 @@ class ProductBoardController extends Controller
             'amazon' => (int) ($totals->amazon ?? 0),
             'noon' => (int) ($totals->noon ?? 0),
             'namshi' => (int) ($totals->namshi ?? 0),
+            'boxStats' => $this->boxStats(),
         ]);
     }
 
@@ -141,6 +142,33 @@ class ProductBoardController extends Controller
         }, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{shop: string, shop_slug: string, box: string, items: int, lots: int}>
+     */
+    private function boxStats()
+    {
+        return BoxReceipt::query()
+            ->select('shop_slug', 'box_number')
+            ->selectRaw('COALESCE(SUM(qty), 0) as items')
+            ->selectRaw('COUNT(DISTINCT lot_id) as lots')
+            ->groupBy('shop_slug', 'box_number')
+            ->orderBy('shop_slug')
+            ->orderBy('box_number')
+            ->get()
+            ->map(fn ($row): array => [
+                'shop' => match ($row->shop_slug) {
+                    'amazon' => 'Amazon',
+                    'noon' => 'Noon',
+                    'namshi' => 'Namshi',
+                    default => $row->shop_slug,
+                },
+                'shop_slug' => $row->shop_slug,
+                'box' => $row->box_number,
+                'items' => (int) $row->items,
+                'lots' => (int) $row->lots,
+            ]);
     }
 
     /**

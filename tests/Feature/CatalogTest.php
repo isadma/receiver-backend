@@ -251,11 +251,49 @@ class CatalogTest extends TestCase
             ->assertOk()
             ->assertSee('Приёмка')
             ->assertSee('Короба')
+            ->assertSee('По коробам')
+            ->assertSee('Пока нет коробов.')
             ->assertSee('Магазин')
             ->assertSee('Короб')
             ->assertSee('Скачать Excel')
             ->assertSee('id="catalog"', false)
             ->assertSee('/datatable');
+    }
+
+    public function test_home_shows_item_and_lot_counts_per_box(): void
+    {
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])->assertOk();
+        $this->asAdmin()->postJson('/api/lots/KVSHIFT1/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])->assertOk();
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'noon',
+            'box' => '1',
+            'allow_repeat' => true,
+        ])->assertOk();
+
+        $this->asAdmin()->get('/')
+            ->assertOk()
+            ->assertDontSee('Пока нет коробов.')
+            ->assertSeeInOrder([
+                'По коробам',
+                'Amazon',
+                'Короб 1',
+                '11',
+                'штук',
+                '2',
+                'лотов',
+                'Noon',
+                'Короб 1',
+                '7',
+                'штук',
+                '1',
+                'лотов',
+            ]);
     }
 
     public function test_datatable_returns_box_receipt_rows(): void
