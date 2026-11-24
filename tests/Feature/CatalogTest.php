@@ -124,6 +124,91 @@ class CatalogTest extends TestCase
             ->assertJsonPath('message', 'Лот не найден.');
     }
 
+    public function test_receive_item_requires_a_box_number(): void
+    {
+        $this->asAdmin()->postJson('/api/items/8684000000001/receive', [
+            'shop' => 'amazon',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['box'])
+            ->assertJsonPath('errors.box.0', 'Введите номер короба.');
+    }
+
+    public function test_unknown_item_barcode_is_not_found(): void
+    {
+        $this->asAdmin()->postJson('/api/items/0000000000000/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Штрихкод не найден.');
+    }
+
+    public function test_receive_item_adds_one_piece_for_that_size_only(): void
+    {
+        $this->asAdmin()->postJson('/api/items/8684000000002/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.lot_barcode', 'KVTEST01')
+            ->assertJsonPath('data.shop', 'amazon')
+            ->assertJsonPath('data.box', '1')
+            ->assertJsonPath('data.pieces_added', 1)
+            ->assertJsonPath('data.items.0.barcode', '8684000000002')
+            ->assertJsonPath('data.items.0.size_code', 'M')
+            ->assertJsonPath('data.items.0.pieces_added', 1)
+            ->assertJsonCount(1, 'data.items');
+
+        $this->assertSame(0, (int) LotItem::query()->where('barcode', '8684000000001')->value('amazon_received_qty'));
+        $this->assertSame(1, (int) LotItem::query()->where('barcode', '8684000000002')->value('amazon_received_qty'));
+        $this->assertSame(1, (int) BoxReceipt::query()
+            ->where('shop_slug', 'amazon')
+            ->where('box_number', '1')
+            ->whereHas('item', fn ($query) => $query->where('barcode', '8684000000002'))
+            ->value('qty'));
+        $this->assertSame(1, BoxReceipt::query()->count());
+    }
+
+    public function test_receive_item_can_scan_the_same_barcode_again(): void
+    {
+        $this->asAdmin()->postJson('/api/items/8684000000001/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])->assertOk();
+
+        $this->asAdmin()->postJson('/api/items/8684000000001/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.pieces_added', 1);
+
+        $this->assertSame(2, (int) LotItem::query()->where('barcode', '8684000000001')->value('amazon_received_qty'));
+        $this->assertSame(2, (int) BoxReceipt::query()
+            ->where('shop_slug', 'amazon')
+            ->where('box_number', '1')
+            ->whereHas('item', fn ($query) => $query->where('barcode', '8684000000001'))
+            ->value('qty'));
+    }
+
+    public function test_receive_item_works_after_the_lot_was_already_received(): void
+    {
+        $this->asAdmin()->postJson('/api/lots/KVTEST01/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])->assertOk();
+
+        $this->asAdmin()->postJson('/api/items/8684000000001/receive', [
+            'shop' => 'amazon',
+            'box' => '1',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.pieces_added', 1);
+
+        $this->assertSame(2, (int) LotItem::query()->where('barcode', '8684000000001')->value('amazon_received_qty'));
+    }
+
     public function test_receive_finds_lot_barcode_case_insensitively(): void
     {
         $this->asAdmin()->postJson('/api/lots/kvtest01/receive', [

@@ -15,3 +15,4 @@ Route::post('/catalog/import', [DemoController::class, 'import']);
 Route::get('/lots', [LotController::class, 'index']);
 Route::get('/lots/{lotBarcode}', [LotController::class, 'showByBarcode']);
 Route::post('/lots/{lotBarcode}/receive', [LotController::class, 'receive']);
+Route::post('/items/{barcode}/receive', [LotController::class, 'receiveItem']);

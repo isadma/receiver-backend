@@ -144,18 +144,83 @@ class LotController extends Controller
                 'shop_name' => $shop->name,
                 'box' => $boxNumber,
                 'pieces_added' => $added,
-                'items' => $lot->items->map(fn (LotItem $item): array => [
-                    'barcode' => $item->barcode,
-                    'size_code' => $item->size_code,
-                    'pieces_per_lot' => $item->pieces_per_lot,
-                    'pieces_added' => $item->pieces_per_lot,
-                    'amazon_received_qty' => $item->amazon_received_qty,
-                    'noon_received_qty' => $item->noon_received_qty,
-                    'namshi_received_qty' => $item->namshi_received_qty,
-                    'total_received_qty' => $item->totalReceived(),
-                ])->values(),
+                'items' => $lot->items->map(fn (LotItem $item): array => $this->itemPayload($item, $item->pieces_per_lot))->values(),
             ],
         ]);
+    }
+
+    public function receiveItem(ReceiveLotRequest $request, string $barcode): JsonResponse
+    {
+        $item = $this->findItem($barcode);
+        $shop = Shop::query()->where('slug', $request->validated('shop'))->firstOrFail();
+        $column = self::RECEIVED_COLUMNS[$shop->slug] ?? null;
+
+        if ($column === null) {
+            throw ValidationException::withMessages([
+                'shop' => 'Этот магазин нельзя использовать для приёмки.',
+            ]);
+        }
+
+        $boxNumber = (string) $request->validated('box');
+
+        DB::transaction(function () use ($item, $column, $shop, $boxNumber): void {
+            $locked = LotItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+
+            LotItem::query()->whereKey($locked->id)->increment($column, 1);
+
+            $receipt = BoxReceipt::query()->firstOrCreate(
+                [
+                    'shop_slug' => $shop->slug,
+                    'box_number' => $boxNumber,
+                    'lot_item_id' => $locked->id,
+                ],
+                [
+                    'lot_id' => $locked->lot_id,
+                    'qty' => 0,
+                ],
+            );
+            $receipt->increment('qty', 1);
+        });
+
+        $item->refresh();
+        $lot = $item->lot()->firstOrFail();
+
+        return response()->json([
+            'data' => [
+                ... (new LotResource($lot->load('items')))->resolve(),
+                'shop' => $shop->slug,
+                'shop_name' => $shop->name,
+                'box' => $boxNumber,
+                'pieces_added' => 1,
+                'items' => [$this->itemPayload($item, 1)],
+            ],
+        ]);
+    }
+
+    /**
+     * @return array{
+     *     barcode: string,
+     *     size_code: string,
+     *     pieces_per_lot: int,
+     *     pieces_added: int,
+     *     amazon_received_qty: int,
+     *     noon_received_qty: int,
+     *     namshi_received_qty: int,
+     *     total_received_qty: int
+     * }
+     */
+    private function itemPayload(LotItem $item, int $piecesAdded): array
+    {
+        return [
+            'barcode' => $item->barcode,
+            'size_code' => $item->size_code,
+            'pieces_per_lot' => $item->pieces_per_lot,
+            'pieces_added' => $piecesAdded,
+            'amazon_received_qty' => $item->amazon_received_qty,
+            'noon_received_qty' => $item->noon_received_qty,
+            'namshi_received_qty' => $item->namshi_received_qty,
+            'total_received_qty' => $item->totalReceived(),
+        ];
     }
 
     private function findLot(string $lotBarcode): Lot
@@ -170,6 +235,20 @@ class LotController extends Controller
         }
 
         return $lot;
+    }
+
+    private function findItem(string $barcode): LotItem
+    {
+        $normalized = strtoupper(trim($barcode));
+        $item = $normalized === ''
+            ? null
+            : LotItem::query()->whereRaw('UPPER(TRIM(barcode)) = ?', [$normalized])->first();
+
+        if ($item === null) {
+            abort(404, 'Штрихкод не найден.');
+        }
+
+        return $item;
     }
 
     private function likeContains(string $value): string
