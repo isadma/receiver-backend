@@ -345,6 +345,7 @@ class CatalogTest extends TestCase
         $this->asAdmin()->get('/')
             ->assertOk()
             ->assertSee('Приёмка')
+            ->assertSee('Всего')
             ->assertSee('Короба')
             ->assertSee('Разных лотов')
             ->assertSee('Лотов всего')
@@ -386,14 +387,34 @@ class CatalogTest extends TestCase
             ->assertOk()
             ->assertDontSee('Пока нет коробов.')
             ->assertSeeInOrder([
+                'Всего',
                 'Штук',
                 '25',
                 'Разных лотов',
                 '2',
                 'Лотов всего',
                 '4',
+                'Amazon',
+                '1',
+                'короба',
+                '18',
+                'штук',
+                '2',
+                'разных лотов',
+                '3',
+                'лотов всего',
+                'Noon',
+                '1',
+                'короба',
+                '7',
+                'штук',
+                '1',
+                'разных лотов',
+                '1',
+                'лотов всего',
                 'По коробам',
                 'Amazon',
+                '1 коробов',
                 'Короб 1',
                 '18',
                 'штук',
@@ -402,6 +423,7 @@ class CatalogTest extends TestCase
                 '3',
                 'лотов всего',
                 'Noon',
+                '1 коробов',
                 'Короб 1',
                 '7',
                 'штук',

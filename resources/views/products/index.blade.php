@@ -84,21 +84,115 @@
 
             .stat.mapped strong { color: var(--mapped); }
 
+            .stats-heading {
+                margin: 0 0 8px;
+                font-size: 13px;
+                font-weight: 800;
+                letter-spacing: 0.4px;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            .shop-stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                gap: 10px;
+                width: 100%;
+                margin: 4px 0 16px;
+            }
+
+            .shop-stat {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                padding: 14px 16px;
+            }
+
+            .shop-stat-name {
+                font-size: 18px;
+                font-weight: 800;
+                margin-bottom: 10px;
+            }
+
+            .shop-stat-nums {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px 16px;
+            }
+
+            .shop-stat-nums strong {
+                display: block;
+                font-size: 24px;
+                font-variant-numeric: tabular-nums;
+                color: var(--mapped);
+            }
+
+            .shop-stat-nums small {
+                color: var(--muted);
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.3px;
+                text-transform: uppercase;
+            }
+
             .section-title {
                 margin: 8px 0 12px;
                 font-size: 18px;
                 font-weight: 800;
             }
 
+            .shop-boxes {
+                margin-bottom: 14px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                padding: 8px 12px 12px;
+            }
+
+            .shop-boxes > summary {
+                cursor: pointer;
+                list-style: none;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 8px 4px 10px;
+                font-size: 18px;
+                font-weight: 800;
+            }
+
+            .shop-boxes > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .shop-boxes > summary::after {
+                content: '▾';
+                color: var(--muted);
+                font-size: 16px;
+            }
+
+            .shop-boxes:not([open]) > summary::after {
+                content: '▸';
+            }
+
+            .shop-boxes-count {
+                color: var(--muted);
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 0.3px;
+                text-transform: uppercase;
+                margin-left: auto;
+                margin-right: 8px;
+            }
+
             .box-stats {
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
                 gap: 10px;
-                margin-bottom: 20px;
             }
 
             .box-stat {
-                background: var(--surface);
+                background: var(--bg);
                 border: 1px solid var(--border);
                 border-radius: 16px;
                 padding: 14px 16px;
@@ -114,7 +208,7 @@
             }
 
             .box-stat-title {
-                margin: 6px 0 12px;
+                margin: 0 0 12px;
                 font-size: 22px;
                 font-weight: 800;
             }
@@ -270,69 +364,95 @@
             <p class="lede">Какой штрихкод в каком коробе и сколько штук.</p>
 
             <div class="top">
-                <div class="stats">
-                    <div class="stat">
-                        <span>Строк</span>
-                        <strong>{{ $rows }}</strong>
-                    </div>
-                    <div class="stat">
-                        <span>Короба</span>
-                        <strong>{{ $boxes }}</strong>
-                    </div>
-                    <div class="stat mapped">
-                        <span>Штук</span>
-                        <strong>{{ $qty }}</strong>
-                    </div>
-                    <div class="stat">
-                        <span>Разных лотов</span>
-                        <strong>{{ $differentLots }}</strong>
-                    </div>
-                    <div class="stat">
-                        <span>Лотов всего</span>
-                        <strong>{{ $scannedLots }}</strong>
-                    </div>
-                    <div class="stat mapped">
-                        <span>Amazon</span>
-                        <strong>{{ $amazon }}</strong>
-                    </div>
-                    <div class="stat mapped">
-                        <span>Noon</span>
-                        <strong>{{ $noon }}</strong>
-                    </div>
-                    <div class="stat mapped">
-                        <span>Namshi</span>
-                        <strong>{{ $namshi }}</strong>
+                <div>
+                    <div class="stats-heading">Всего</div>
+                    <div class="stats">
+                        <div class="stat">
+                            <span>Строк</span>
+                            <strong>{{ $rows }}</strong>
+                        </div>
+                        <div class="stat">
+                            <span>Короба</span>
+                            <strong>{{ $boxes }}</strong>
+                        </div>
+                        <div class="stat mapped">
+                            <span>Штук</span>
+                            <strong>{{ $qty }}</strong>
+                        </div>
+                        <div class="stat">
+                            <span>Разных лотов</span>
+                            <strong>{{ $differentLots }}</strong>
+                        </div>
+                        <div class="stat">
+                            <span>Лотов всего</span>
+                            <strong>{{ $scannedLots }}</strong>
+                        </div>
                     </div>
                 </div>
                 <a class="export" href="{{ url('/export.xlsx') }}">Скачать Excel</a>
+            </div>
+
+            <div class="shop-stats">
+                @foreach ($shopStats as $shop)
+                    <div class="shop-stat">
+                        <div class="shop-stat-name">{{ $shop['name'] }}</div>
+                        <div class="shop-stat-nums">
+                            <div>
+                                <strong>{{ $shop['boxes'] }}</strong>
+                                <small>короба</small>
+                            </div>
+                            <div>
+                                <strong>{{ $shop['qty'] }}</strong>
+                                <small>штук</small>
+                            </div>
+                            <div>
+                                <strong>{{ $shop['differentLots'] }}</strong>
+                                <small>разных лотов</small>
+                            </div>
+                            <div>
+                                <strong>{{ $shop['scannedLots'] }}</strong>
+                                <small>лотов всего</small>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
             </div>
 
             <h2 class="section-title">По коробам</h2>
             @if ($boxStats->isEmpty())
                 <p class="box-stats-empty">Пока нет коробов.</p>
             @else
-                <div class="box-stats">
-                    @foreach ($boxStats as $box)
-                        <div class="box-stat">
-                            <span class="box-stat-label">{{ $box['shop'] }}</span>
-                            <div class="box-stat-title">Короб {{ $box['box'] }}</div>
-                            <div class="box-stat-nums">
-                                <div>
-                                    <strong>{{ $box['items'] }}</strong>
-                                    <small>штук</small>
+                @foreach ($shopStats as $shop)
+                    @php $shopBoxes = $boxStats->where('shop_slug', $shop['slug']); @endphp
+                    @continue($shopBoxes->isEmpty())
+                    <details class="shop-boxes" open>
+                        <summary>
+                            {{ $shop['name'] }}
+                            <span class="shop-boxes-count">{{ $shopBoxes->count() }} коробов</span>
+                        </summary>
+                        <div class="box-stats">
+                            @foreach ($shopBoxes as $box)
+                                <div class="box-stat">
+                                    <div class="box-stat-title">Короб {{ $box['box'] }}</div>
+                                    <div class="box-stat-nums">
+                                        <div>
+                                            <strong>{{ $box['items'] }}</strong>
+                                            <small>штук</small>
+                                        </div>
+                                        <div>
+                                            <strong>{{ $box['different_lots'] }}</strong>
+                                            <small>разных лотов</small>
+                                        </div>
+                                        <div>
+                                            <strong>{{ $box['scanned_lots'] }}</strong>
+                                            <small>лотов всего</small>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <strong>{{ $box['different_lots'] }}</strong>
-                                    <small>разных лотов</small>
-                                </div>
-                                <div>
-                                    <strong>{{ $box['scanned_lots'] }}</strong>
-                                    <small>лотов всего</small>
-                                </div>
-                            </div>
+                            @endforeach
                         </div>
-                    @endforeach
-                </div>
+                    </details>
+                @endforeach
             @endif
 
             <div class="filters">

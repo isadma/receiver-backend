@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\BoxReceipt;
-use App\Models\LotItem;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
@@ -15,25 +14,28 @@ use Yajra\DataTables\Facades\DataTables;
 
 class ProductBoardController extends Controller
 {
+    /**
+     * @var array<string, string>
+     */
+    private const SHOPS = [
+        'amazon' => 'Amazon',
+        'noon' => 'Noon',
+        'namshi' => 'Namshi',
+    ];
+
     public function index(): View
     {
-        $totals = LotItem::query()
-            ->selectRaw('COALESCE(SUM(amazon_received_qty), 0) as amazon')
-            ->selectRaw('COALESCE(SUM(noon_received_qty), 0) as noon')
-            ->selectRaw('COALESCE(SUM(namshi_received_qty), 0) as namshi')
-            ->first();
         $lotScans = $this->lotScans();
+        $boxStats = $this->boxStats($lotScans);
 
         return view('products.index', [
             'rows' => BoxReceipt::query()->count(),
-            'boxes' => BoxReceipt::query()->select('shop_slug', 'box_number')->distinct()->get()->count(),
+            'boxes' => $boxStats->count(),
             'qty' => (int) $lotScans->sum('items'),
             'differentLots' => $lotScans->pluck('lot_id')->unique()->count(),
             'scannedLots' => (int) round((float) $lotScans->sum('scans')),
-            'amazon' => (int) ($totals->amazon ?? 0),
-            'noon' => (int) ($totals->noon ?? 0),
-            'namshi' => (int) ($totals->namshi ?? 0),
-            'boxStats' => $this->boxStats($lotScans),
+            'shopStats' => $this->shopStats($lotScans),
+            'boxStats' => $boxStats,
         ]);
     }
 
@@ -175,22 +177,41 @@ class ProductBoardController extends Controller
 
     /**
      * @param  Collection<int, object{shop_slug: string, box_number: string, lot_id: int, items: int|float|string, scans: int|float|string|null}>  $lotScans
+     * @return Collection<int, array{slug: string, name: string, boxes: int, qty: int, differentLots: int, scannedLots: int}>
+     */
+    private function shopStats(Collection $lotScans): Collection
+    {
+        $grouped = $lotScans->groupBy('shop_slug');
+
+        return collect(self::SHOPS)->map(function (string $name, string $slug) use ($grouped): array {
+            $rows = $grouped->get($slug, collect());
+
+            return [
+                'slug' => $slug,
+                'name' => $name,
+                'boxes' => $rows->pluck('box_number')->unique()->count(),
+                'qty' => (int) $rows->sum('items'),
+                'differentLots' => $rows->pluck('lot_id')->unique()->count(),
+                'scannedLots' => (int) round((float) $rows->sum('scans')),
+            ];
+        })->values();
+    }
+
+    /**
+     * @param  Collection<int, object{shop_slug: string, box_number: string, lot_id: int, items: int|float|string, scans: int|float|string|null}>  $lotScans
      * @return Collection<int, array{shop: string, shop_slug: string, box: string, items: int, different_lots: int, scanned_lots: int}>
      */
     private function boxStats(Collection $lotScans): Collection
     {
+        $shopOrder = array_flip(array_keys(self::SHOPS));
+
         return $lotScans
             ->groupBy(fn ($row) => $row->shop_slug.'|'.$row->box_number)
             ->map(function (Collection $rows): array {
                 $first = $rows->first();
 
                 return [
-                    'shop' => match ($first->shop_slug) {
-                        'amazon' => 'Amazon',
-                        'noon' => 'Noon',
-                        'namshi' => 'Namshi',
-                        default => $first->shop_slug,
-                    },
+                    'shop' => self::SHOPS[$first->shop_slug] ?? $first->shop_slug,
                     'shop_slug' => $first->shop_slug,
                     'box' => $first->box_number,
                     'items' => (int) $rows->sum('items'),
@@ -198,7 +219,11 @@ class ProductBoardController extends Controller
                     'scanned_lots' => (int) round((float) $rows->sum('scans')),
                 ];
             })
-            ->sortBy(fn (array $row): string => $row['shop_slug']."\t".$row['box'])
+            ->sortBy(fn (array $row): string => sprintf(
+                '%02d\t%s',
+                $shopOrder[$row['shop_slug']] ?? 99,
+                $row['box'],
+            ))
             ->values();
     }
 
