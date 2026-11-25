@@ -26,6 +26,7 @@ class Lot extends Model
         'variant',
         'usd',
         'currency',
+        'country_of_origin',
         'invoice_lot_qty',
     ];
 

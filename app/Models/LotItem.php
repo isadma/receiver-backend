@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LotItem extends Model
 {
@@ -41,6 +42,14 @@ class LotItem extends Model
     public function lot(): BelongsTo
     {
         return $this->belongsTo(Lot::class);
+    }
+
+    /**
+     * @return HasMany<BoxReceipt, $this>
+     */
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(BoxReceipt::class);
     }
 
     public function totalReceived(): int
