@@ -8,6 +8,7 @@ use App\Models\LotItem;
 use App\Support\CatalogImporter;
 use App\Support\ExcelSheet;
 use App\Support\NoonNisExporter;
+use App\Support\NoonNisMapper;
 use App\Support\NuriCatalogUpserter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -107,6 +108,10 @@ class NoonNisTest extends TestCase
         $this->assertSame('كحلي', collect($rows)->firstWhere('seller_sku', '8684053490029')['colour_name_ar']);
         $this->assertStringContainsString('طقم قطعتين للأولاد', collect($rows)->firstWhere('seller_sku', '8684053490067')['long_description_ar']);
         $this->assertSame('طقم من قطعتين', $rows[0]['whats_in_the_box_ar']);
+        $this->assertSame(NoonNisMapper::IMAGE_URL_1, $rows[0]['image_url_1']);
+        $this->assertSame(NoonNisMapper::IMAGE_URL_2, $rows[0]['image_url_2']);
+        $this->assertSame(NoonNisMapper::IMAGE_URL_1, collect($rows)->firstWhere('seller_sku', '8684053490067')['image_url_1']);
+        $this->assertSame(NoonNisMapper::IMAGE_URL_2, collect($rows)->firstWhere('seller_sku', '8684053490067')['image_url_2']);
 
         $pricePath = sys_get_temp_dir().'/nis-price-'.uniqid().'.xlsx';
         $priced = NoonNisExporter::writePriceSheet($pricePath, ExcelSheet::barcodesFromReceiver($receiver), '1455');
@@ -116,6 +121,31 @@ class NoonNisTest extends TestCase
         $this->assertSame('1455', $priceRows[0]['id_partner']);
         $this->assertSame('100', $priceRows[0]['price']);
         $this->assertContains('8684053490067', collect($priceRows)->pluck('partner_sku')->all());
+    }
+
+    public function test_official_price_update_keeps_psku_and_partner_sku(): void
+    {
+        $template = sys_get_temp_dir().'/noon-price-'.uniqid().'.csv';
+        file_put_contents($template, implode(',', [
+            'psku_code', 'country_code', 'id_partner', 'partner_sku', 'price', 'sale_price', 'sale_start', 'sale_end',
+        ])."\n".implode(',', [
+            'abc123', 'ae', '661132', '8684053490067', '', '', '', '',
+        ])."\n");
+        $output = sys_get_temp_dir().'/noon-price-out-'.uniqid().'.csv';
+
+        $count = NoonNisExporter::fillOfficialPriceUpdate($template, $output);
+
+        $this->assertSame(1, $count);
+        $rows = ExcelSheet::assocRows($output);
+        $this->assertSame('abc123', $rows[0]['psku_code']);
+        $this->assertSame('ae', $rows[0]['country_code']);
+        $this->assertSame('661132', $rows[0]['id_partner']);
+        $this->assertSame('8684053490067', $rows[0]['partner_sku']);
+        $this->assertSame('100', $rows[0]['price']);
+        $slim = ExcelSheet::assocRows((string) preg_replace('/\.csv$/i', '-slim.csv', $output));
+        $this->assertSame('abc123', $slim[0]['psku_code']);
+        $this->assertSame('8684053490067', $slim[0]['partner_sku']);
+        $this->assertSame('100', $slim[0]['price']);
     }
 
     public function test_nis_export_does_not_add_columns_missing_from_template(): void
@@ -200,7 +230,7 @@ class NoonNisTest extends TestCase
             'material_composition', 'gtin', 'country_of_origin', 'long_description', 'long_description_ar',
             'whats_in_the_box', 'whats_in_the_box_ar', 'feature_bullet_1', 'feature_bullet_1_ar',
             'feature_bullet_2', 'feature_bullet_2_ar', 'feature_bullet_3', 'feature_bullet_3_ar',
-            'msrp_ae', 'vat_rate_ae',
+            'image_url_1', 'image_url_2', 'msrp_ae', 'vat_rate_ae',
         ];
         $worksheet->fromArray([$codes], null, 'A9');
 

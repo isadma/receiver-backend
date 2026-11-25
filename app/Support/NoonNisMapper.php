@@ -8,6 +8,10 @@ class NoonNisMapper
 {
     public const PRICE_AED = '100';
 
+    public const IMAGE_URL_1 = 'https://receiver.meredow.com/images/image-1.jpg';
+
+    public const IMAGE_URL_2 = 'https://receiver.meredow.com/images/image-2.jpg';
+
     /**
      * @var array<string, string>
      */
@@ -291,6 +295,8 @@ class NoonNisMapper
             'feature_bullet_3' => $bulletsEn[2] ?? '',
             'feature_bullet_3_en' => $bulletsEn[2] ?? '',
             'feature_bullet_3_ar' => $bulletsAr[2] ?? '',
+            'image_url_1' => self::IMAGE_URL_1,
+            'image_url_2' => self::IMAGE_URL_2,
             'msrp_ae' => self::PRICE_AED,
             'vat_rate_ae' => 'Std',
         ];

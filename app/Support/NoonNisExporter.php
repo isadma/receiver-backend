@@ -161,4 +161,111 @@ class NoonNisExporter
 
         return count($unique);
     }
+
+    public static function fillOfficialPriceUpdate(string $templateCsv, string $outputCsv): int
+    {
+        $handle = fopen($templateCsv, 'r');
+        if ($handle === false) {
+            throw new RuntimeException('Could not read Noon Price Update template.');
+        }
+
+        try {
+            $headers = fgetcsv($handle);
+            if ($headers === false || $headers === []) {
+                throw new RuntimeException('Noon Price Update template has no header row.');
+            }
+            $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $headers[0]) ?? $headers[0];
+
+            $rows = [];
+            while (($data = fgetcsv($handle)) !== false) {
+                if ($data === [null] || $data === false) {
+                    continue;
+                }
+                $row = [];
+                foreach ($headers as $index => $header) {
+                    $row[$header] = $data[$index] ?? '';
+                }
+                $row['price'] = NoonNisMapper::PRICE_AED;
+                $row['sale_price'] = '';
+                $row['sale_start'] = '';
+                $row['sale_end'] = '';
+                $rows[] = $row;
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        $directory = dirname($outputCsv);
+        if (! is_dir($directory)) {
+            mkdir($directory, 0777, true);
+        }
+
+        $out = fopen($outputCsv, 'w');
+        if ($out === false) {
+            throw new RuntimeException('Could not write Noon Price Update file.');
+        }
+
+        fwrite($out, self::csvLine($headers)."\n");
+        foreach ($rows as $row) {
+            $line = [];
+            foreach ($headers as $header) {
+                $line[] = $row[$header] ?? '';
+            }
+            fwrite($out, self::csvLine($line)."\n");
+        }
+        fclose($out);
+
+        $xlsxPath = (string) preg_replace('/\.csv$/i', '.xlsx', $outputCsv);
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('price');
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValueExplicit([$index + 1, 1], $header, DataType::TYPE_STRING);
+        }
+        foreach ($rows as $rowIndex => $row) {
+            foreach ($headers as $index => $header) {
+                $value = (string) ($row[$header] ?? '');
+                $column = $index + 1;
+                $excelRow = $rowIndex + 2;
+                if ($header === 'price' && $value !== '') {
+                    $sheet->setCellValue([$column, $excelRow], (int) $value);
+
+                    continue;
+                }
+                $sheet->setCellValueExplicit([$column, $excelRow], $value, DataType::TYPE_STRING);
+            }
+        }
+        IOFactory::createWriter($spreadsheet, 'Xlsx')->save($xlsxPath);
+
+        $slimPath = (string) preg_replace('/\.csv$/i', '-slim.csv', $outputCsv);
+        $slim = fopen($slimPath, 'w');
+        if ($slim === false) {
+            throw new RuntimeException('Could not write slim Noon Price Update file.');
+        }
+        $slimHeaders = ['psku_code', 'country_code', 'id_partner', 'partner_sku', 'price'];
+        fwrite($slim, self::csvLine($slimHeaders)."\n");
+        foreach ($rows as $row) {
+            fwrite($slim, self::csvLine([
+                $row['psku_code'] ?? '',
+                $row['country_code'] ?? '',
+                $row['id_partner'] ?? '',
+                $row['partner_sku'] ?? '',
+                $row['price'] ?? '',
+            ])."\n");
+        }
+        fclose($slim);
+
+        return count($rows);
+    }
+
+    /**
+     * @param  list<string>  $fields
+     */
+    private static function csvLine(array $fields): string
+    {
+        return implode(',', array_map(
+            fn (string $field) => '"'.str_replace('"', '""', $field).'"',
+            $fields,
+        ));
+    }
 }

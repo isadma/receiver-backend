@@ -26,10 +26,11 @@ class ExportNoonNisCommand extends Command
         $barcodes = ExcelSheet::barcodesFromReceiver($barcodesPath);
         $result = NoonNisExporter::export($template, $output, $barcodes);
         $pricePath = (string) preg_replace('/\.xlsx$/i', '-price.xlsx', $output);
+        $partnerId = trim((string) $this->option('partner-id'));
         $priced = NoonNisExporter::writePriceSheet(
             $pricePath,
             $barcodes,
-            (string) $this->option('partner-id'),
+            $partnerId !== '' ? $partnerId : '661132',
         );
 
         $this->info("Wrote {$result['parents']} parents and {$result['children']} children to {$output}.");
